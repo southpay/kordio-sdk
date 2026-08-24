@@ -60,7 +60,7 @@ export interface TransportConfig {
   userAgentSuffix?: string
 }
 
-const SDK_VERSION = '0.4.0'
+const SDK_VERSION = '0.4.1'
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504])
 const DEFAULT_TIMEOUT_MS = 60_000
 const DEFAULT_MAX_RETRIES = 2

@@ -176,3 +176,49 @@ describe('token endpoint location', () => {
     expect(t.calls[0]?.url).toBe('https://auth.internal/token')
   })
 })
+
+describe('credential precedence', () => {
+  function withEnv<T>(vars: Record<string, string>, fn: () => T): T {
+    const saved = Object.keys(vars).map((k) => [k, process.env[k]] as const)
+    Object.assign(process.env, vars)
+    try {
+      return fn()
+    } finally {
+      for (const [k, v] of saved) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+    }
+  }
+
+  test('an explicit accessToken beats client credentials in the environment', async () => {
+    const t = tracker(() => json(ledgerEnvelope({ object: 'account' })))
+    await withEnv(
+      { KORDIO_CLIENT_ID: 'env_client', KORDIO_CLIENT_SECRET: 'env_secret' },
+      async () => {
+        const kordio = new KordioLedger({
+          accessToken: 'explicit-token',
+          baseUrl: 'https://api.test',
+          fetch: t.fetch,
+        })
+        await kordio.accounts.get('cash:usd')
+      },
+    )
+
+    expect(t.calls.some((c) => c.url.includes('/oauth/token'))).toBe(false)
+    expect(t.calls[0]?.headers.authorization).toBe('Bearer explicit-token')
+  })
+
+  test('the environment is still used when nothing is passed', async () => {
+    const t = tracker((call) =>
+      call.url.endsWith('/oauth/token')
+        ? json({ access_token: 'from_env', token_type: 'Bearer', expires_in: 3600 })
+        : json(ledgerEnvelope({ object: 'account' })),
+    )
+    await withEnv({ KORDIO_CLIENT_ID: 'c', KORDIO_CLIENT_SECRET: 's' }, async () => {
+      const kordio = new KordioLedger({ baseUrl: 'https://api.test', fetch: t.fetch })
+      await kordio.accounts.get('cash:usd')
+    })
+    expect(t.calls[0]?.url).toContain('/oauth/token')
+  })
+})

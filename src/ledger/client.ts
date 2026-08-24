@@ -49,12 +49,8 @@ function env(name: string): string | undefined {
 function resolveAuth(options: KordioLedgerOptions, baseUrl: string): AuthProvider {
   if (options.auth) return options.auth
 
-  const accessToken = options.accessToken ?? env('KORDIO_TOKEN')
-  const clientId = options.clientId ?? env('KORDIO_CLIENT_ID')
-  const clientSecret = options.clientSecret ?? env('KORDIO_CLIENT_SECRET')
-
-  if (clientId && clientSecret) {
-    return new OAuthAuthProvider({
+  const oauth = (clientId: string, clientSecret: string) =>
+    new OAuthAuthProvider({
       clientId,
       clientSecret,
       scope: options.scope,
@@ -62,9 +58,18 @@ function resolveAuth(options: KordioLedgerOptions, baseUrl: string): AuthProvide
       tokenUrl: options.tokenUrl ?? env('KORDIO_TOKEN_URL'),
       fetch: options.fetch,
     })
-  }
 
-  if (accessToken) return new StaticTokenAuthProvider(accessToken)
+  if (options.clientId && options.clientSecret) {
+    return oauth(options.clientId, options.clientSecret)
+  }
+  if (options.accessToken) return new StaticTokenAuthProvider(options.accessToken)
+
+  const clientId = env('KORDIO_CLIENT_ID')
+  const clientSecret = env('KORDIO_CLIENT_SECRET')
+  if (clientId && clientSecret) return oauth(clientId, clientSecret)
+
+  const token = env('KORDIO_TOKEN')
+  if (token) return new StaticTokenAuthProvider(token)
 
   throw new TypeError(
     'KordioLedger needs credentials: pass { clientId, clientSecret } or { accessToken }, ' +

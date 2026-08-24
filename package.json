@@ -1,6 +1,6 @@
 {
   "name": "@kordio/sdk",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "TypeScript SDK for the Kordio ledger and spend control APIs.",
   "license": "MIT",
   "homepage": "https://docs.kordio.io",
