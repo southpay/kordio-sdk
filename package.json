@@ -49,6 +49,7 @@
     "generate": "bun scripts/generate.ts",
     "check:generated": "bun scripts/generate.ts --check",
     "check:coverage": "bun scripts/check-coverage.ts",
+    "check:routes": "bun scripts/check-routes.ts",
     "validate:live": "bun scripts/validate-live.ts",
     "build": "tsup",
     "typecheck": "tsc --noEmit",

@@ -124,6 +124,8 @@ caller-controlled keys that a rewriting pass would corrupt.
 `bun run verify` covers generated-type freshness, endpoint coverage, typecheck,
 tests, Biome and the build.
 
-`bun run validate:live` runs against a real ledger and is the only thing that
-catches spec-versus-reality drift. It writes data, so point it at a test-mode
+`bun run check:routes` asks the live API for every documented path and fails on
+a 404. No credentials needed, and it runs in the release workflow.
+
+`bun run validate:live` goes further and checks request and response shapes. It writes data, so point it at a test-mode
 ledger. Run it when you touch request or response shapes.
