@@ -1,0 +1,3745 @@
+openapi: 3.1.0
+
+info:
+  title: Kordio Agent Control API
+  version: "1.0.0"
+  description: |
+    The control layer decides whether an agent may take an action before it takes it, and
+    signs the answer so the executor can verify authority without trusting the agent.
+
+    Two credentials reach this API and they are deliberately not interchangeable.
+
+    A **agent key** (`krt_live_…` or `krt_test_…`) is what an agent carries. It reaches
+    `/v1/agent/*` and can ask for authorization, but it can never write policy. An agent
+    able to widen its own limits is not governed by them.
+
+    An **identity token** is what a person or your backend carries. It reaches
+    `/v1/workspaces/{workspace_slug}/*` and manages agents, policy, approvals and
+    members. It can never authorize an action as an agent.
+
+    Cosignature verification needs no credential at all.
+  contact:
+    name: Kordio support
+    email: support@kordio.io
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.kordio.io
+    description: Production
+
+externalDocs:
+  description: Control layer guides
+  url: https://docs.kordio.io/agents
+
+security:
+  - AgentKey: []
+
+tags:
+  - name: Actions
+    description: >-
+      The authorization call that goes in front of a spend, and the outcome reports that
+      settle or release its reservation. Agent key.
+  - name: Budgets
+    description: Budget envelopes for one agent run. Agent key.
+  - name: Spend tokens
+    description: >-
+      Single-use, pre-authorized ceilings an agent mints against its own session and
+      presents later on a payment. Agent key.
+  - name: Payment intents
+    description: >-
+      Authorize a payment. You settle it and report back. Agent key.
+  - name: Cosignatures
+    description: Verify a signed authorization. Unauthenticated.
+  - name: Agents
+    description: Scoped identities for agent workloads. Identity token.
+  - name: Policies
+    description: The rules attached to an agent. Identity token.
+  - name: Policy modules
+    description: Named, reusable rule sets a policy imports by name. Identity token.
+  - name: Policy previews
+    description: Evaluate a draft policy without saving it. Identity token.
+  - name: Approvals
+    description: >-
+      The queue of intents a rule held for a person, and the calls that resolve them.
+      Identity token.
+  - name: Funds
+    description: Committed, held and unprojected spend across a workspace. Identity token.
+  - name: Audit events
+    description: The append-only record of everything the control layer did. Identity token.
+  - name: Webhook endpoints
+    description: Control-layer event delivery. Identity token.
+  - name: Workspaces
+    description: Workspace lifecycle and export. Identity token.
+  - name: Members
+    description: Memberships and invitations. Identity token.
+  - name: Billing
+    description: >-
+      Plan, entitlements and prepaid volume. Console-facing; agents never call these.
+      Identity token.
+
+paths:
+
+  /v1/agent/actions:
+    post:
+      tags: [Actions]
+      operationId: authorizeAction
+      summary: Authorize an action
+      description: |
+        The call that goes in front of the spend. Runs the full policy evaluation, reserves
+        budget against the budget, records an intent, and returns the decision.
+
+        Branch on the **status code**, not the body.
+
+        An intent is recorded even when the outcome is `denied`, so a refusal is auditable.
+
+        An agent with no active policy denies everything, with rule `no_policy`. This is
+        deliberate and fail-closed: write a policy before you expect an allow.
+      security:
+        - AgentKey: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+            examples:
+              payment:
+                summary: A vendor payment
+                value:
+                  budget_id: 3f1c8a92-5d41-4c8e-9f2b-7a6e1d0c4b83
+                  action_type: payment.create
+                  resource: acme-supplies.example
+                  cost_cents: 12000
+                  metadata:
+                    order_id: "4471"
+              toolCall:
+                summary: A paid tool call that spends nothing directly
+                value:
+                  budget_id: 3f1c8a92-5d41-4c8e-9f2b-7a6e1d0c4b83
+                  action_type: tool.invoke
+                  resource: api.example.com
+                  cost_cents: 0
+      responses:
+        '201':
+          description: >-
+            `allowed`. Execute the action, then report the outcome with `complete` or
+            `fail`. A `cosignature` is included when cosigning is configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDecisionResponse'
+              example:
+                data:
+                  id: 9b2ef0c1-6a3d-4e75-8c19-2f4b7d5a0e63
+                  workspace_id: 1c4f8b20-9e77-4a31-b5d2-06a8c3e91f4d
+                  agent_id: 7d2a6c15-3f89-4b02-9e64-8a15d7c0b3f2
+                  budget_id: 3f1c8a92-5d41-4c8e-9f2b-7a6e1d0c4b83
+                  action_type: payment.create
+                  resource: acme-supplies.example
+                  cost_cents: 12000
+                  currency: USD
+                  state: pending
+                  idempotency_key: order-4471-attempt-1
+                  trace_id: 5e8c1a47-2b93-4d06-a7f1-9c3e05b8d24a
+                  ledger_transaction_id: null
+                  failure_reason: null
+                  resolved_by_sub: null
+                  resolved_at: null
+                  metadata:
+                    order_id: "4471"
+                  created_at: "2026-08-04T09:12:04Z"
+                  updated_at: "2026-08-04T09:12:04Z"
+                decision:
+                  outcome: allowed
+                  rule: null
+                  detail: {}
+                  headroom:
+                    session_remaining_cents: 38000
+                    monthly_remaining_cents: 188000
+                  policy_snapshot: []
+                cosignature: eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0
+        '202':
+          description: >-
+            `requires_approval`. A rule held the action for a person. No cosignature is
+            issued. The budget stays reserved while it waits.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDecisionResponse'
+              example:
+                data:
+                  id: 9b2ef0c1-6a3d-4e75-8c19-2f4b7d5a0e63
+                  state: requires_approval
+                  action_type: payment.create
+                  cost_cents: 240000
+                  currency: USD
+                decision:
+                  outcome: requires_approval
+                  rule: approval_threshold
+                  detail:
+                    above_cents: 100000
+                  headroom:
+                    session_remaining_cents: 260000
+                  policy_snapshot: []
+        '403':
+          description: >-
+            `denied`. Do not execute. `decision.rule` names what refused. The intent is
+            still recorded, in state `denied`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDecisionResponse'
+              example:
+                data:
+                  id: 9b2ef0c1-6a3d-4e75-8c19-2f4b7d5a0e63
+                  state: denied
+                  cost_cents: 120000
+                decision:
+                  outcome: denied
+                  rule: per_transaction_cap
+                  detail:
+                    max_cents: 50000
+                    requested_cents: 120000
+                  headroom:
+                    session_remaining_cents: 380000
+                  policy_snapshot: []
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          description: The budget does not belong to this agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            The `Idempotency-Key` header is missing (`idempotency_key_required`), or the
+            body is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: Idempotency-Key header is required
+                  code: idempotency_key_required
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /v1/agent/actions/simulate:
+    post:
+      tags: [Actions]
+      operationId: simulateAction
+      summary: Simulate an action
+      description: |
+        Runs the same evaluation and records nothing: no intent, no reservation, no budget
+        consumed. Always `200`, whatever the outcome.
+
+        Use it in tests, and in your own UI to show someone what a policy would do before
+        they save it. Note that a simulation does write an `action.simulated` audit event,
+        so simulations are still visible in the trail.
+      security:
+        - AgentKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: The decision that would have been produced. No `id`, because no intent exists.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Decision'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          description: The budget does not belong to this agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /v1/agent/actions/{id}:
+    get:
+      tags: [Actions]
+      operationId: getAction
+      summary: Read an action intent
+      description: >-
+        The current state of one intent. This is what you poll while an action sits in
+        `requires_approval`, if you are not using webhooks.
+      security:
+        - AgentKey: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionIntentEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFoundForAgent'
+
+  /v1/agent/actions/{id}/complete:
+    post:
+      tags: [Actions]
+      operationId: completeAction
+      summary: Report success
+      description: |
+        The action succeeded. Settles the reservation and moves the intent from `pending` to
+        `completed`.
+
+        Reporting is not optional. An intent left `pending` holds its budget until the
+        session closes.
+      security:
+        - AgentKey: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The executed intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionIntentEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFoundForAgent'
+        '422':
+          description: >-
+            The intent is not in a state that can be completed. Only `pending` intents
+            settle.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/agent/actions/{id}/fail:
+    post:
+      tags: [Actions]
+      operationId: failAction
+      summary: Report failure
+      description: >-
+        The action failed. Releases the reservation back to the budget and moves
+        the intent from `pending` or `requires_approval` to `failed`.
+      security:
+        - AgentKey: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: >-
+                    Stored on the intent and shown in the audit trail. Defaults to
+                    `execution_failed`.
+                  example: vendor returned 502
+      responses:
+        '200':
+          description: The failed intent, with its reservation released.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionIntentEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFoundForAgent'
+        '422':
+          description: The intent is not in a state that can fail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/agent/budgets:
+    post:
+      tags: [Budgets]
+      operationId: createSession
+      summary: Open a budget
+      description: |
+        A budget is the budget envelope for one agent run. Every authorized action commits
+        against it, and it is what a runaway loop runs into.
+
+        Budget is claimed with a single conditional update rather than a lock, so parallel
+        sub-agents under one agent contend at the row instead of queueing.
+      security:
+        - AgentKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [budget_cents]
+              properties:
+                budget_cents:
+                  type: integer
+                  minimum: 1
+                  description: >-
+                    The ceiling for this run, in minor units. Refused with
+                    `budget_ceiling` if it exceeds the agent's
+                    `max_budget_cents`, and with `parent_budget_exhausted` if a
+                    parent is named and has less than this left.
+                  example: 50000
+                currency:
+                  type: string
+                  default: USD
+                  example: USD
+                parent_budget_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: >-
+                    Delegates from an existing session belonging to the same agent.
+      responses:
+        '201':
+          description: The open session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          description: The parent session does not belong to this agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /v1/agent/budgets/{id}:
+    get:
+      tags: [Budgets]
+      operationId: getSession
+      summary: Read a budget
+      description: Read the remaining budget on a budget.
+      security:
+        - AgentKey: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The budget.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFoundForAgent'
+
+  /v1/agent/spend_tokens:
+    post:
+      tags: [Spend tokens]
+      operationId: createSpendToken
+      summary: Mint a spend token
+      description: |
+        A spend token is a single-use ceiling an agent mints against one of its own
+        budgets and presents later on `POST /v1/agent/payment_intents` via
+        `spend_token_id`.
+
+        It only ever narrows. A token cannot widen a policy, raise a cap, or authorize
+        something policy would refuse. When a payment cites one, the token is checked
+        first, and if the token itself refuses, the policy engine never runs.
+
+        Pin it to a `counterparty` when you know the payee in advance. That turns "this
+        agent may spend $200" into "this agent may spend $200, once, to this vendor".
+      security:
+        - AgentKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [budget_id, amount_ceiling_cents]
+              properties:
+                budget_id:
+                  type: string
+                  format: uuid
+                amount_ceiling_cents:
+                  type: integer
+                  minimum: 1
+                  description: The most this token may authorize, in minor units.
+                  example: 20000
+                counterparty:
+                  type: string
+                  nullable: true
+                  description: >-
+                    Pins the token to one payee. A payment to anyone else is refused with
+                    `spend_token_counterparty`.
+                  example: acme-supplies.example
+                expires_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '201':
+          description: The minted token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendTokenEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          description: The budget does not belong to this agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /v1/agent/payment_intents:
+    post:
+      tags: [Payment intents]
+      operationId: createPaymentIntent
+      summary: Authorize a payment
+      description: |
+        Evaluated as the action type `payment.create` with the counterparty as its
+        resource, so an agent's caps, windows and allowlists apply across payments and
+        other actions together. Spend on one consumes headroom for the other.
+
+        One difference from `POST /v1/agent/actions` that will bite you if you assume
+        symmetry:
+
+        - **Idempotency is a body field here**, `idempotency_key`, not the
+          `Idempotency-Key` header. A missing one is a `400`, not a `422`.
+
+        Kordio authorizes the payment; it never moves the money. An allowed payment comes
+        back `pending` with a cosignature. Settle it on your own rail, then report the
+        outcome with `complete` or `fail`.
+      security:
+        - AgentKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [budget_id, amount_cents, idempotency_key]
+              properties:
+                budget_id:
+                  type: string
+                  format: uuid
+                amount_cents:
+                  type: integer
+                  minimum: 1
+                  example: 12000
+                idempotency_key:
+                  type: string
+                  description: >-
+                    Required, and sent in the body rather than as a header. Unique per
+                    agent. A replay returns the original intent and decision at the
+                    original status.
+                  example: order-4471-attempt-1
+                counterparty:
+                  type: string
+                  nullable: true
+                  example: acme-supplies.example
+                spend_token_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: A token minted by this agent against the same session.
+                trace_id:
+                  type: string
+                  nullable: true
+                decision_context:
+                  type: object
+                  additionalProperties: true
+                  description: >-
+                    Free-form context stored with the intent and echoed back, with the
+                    decision merged in under the key `decision`. Provenance only: policy
+                    never reads it. Put anything a rule must evaluate in `metadata`.
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: >-
+                    Facts the policy engine evaluates, reachable in a rule as
+                    `metadata.<key>` with dot paths for nested values. Same field, same
+                    meaning, as on `POST /v1/agent/actions`.
+      responses:
+        '201':
+          description: >-
+            `allowed`. The payment is `pending` until you settle it and report back.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDecisionResponse'
+              example:
+                data:
+                  id: 4a7c2e18-9b05-4f63-8d21-6e0a3c7f5b94
+                  workspace_id: 1c4f8b20-9e77-4a31-b5d2-06a8c3e91f4d
+                  agent_id: 7d2a6c15-3f89-4b02-9e64-8a15d7c0b3f2
+                  budget_id: 3f1c8a92-5d41-4c8e-9f2b-7a6e1d0c4b83
+                  spend_token_id: null
+                  amount_cents: 12000
+                  currency: USD
+                  counterparty: acme-supplies.example
+                  state: pending
+                  failure_reason: null
+                  idempotency_key: order-4471-attempt-1
+                  created_at: "2026-08-04T09:12:04Z"
+                decision:
+                  outcome: allowed
+                  rule: null
+                  detail: {}
+                  headroom:
+                    session_remaining_cents: 38000
+                  policy_snapshot: []
+                cosignature: eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0
+        '202':
+          description: >-
+            `requires_approval`. Nothing has moved. Approving returns the intent to
+            `pending` for you to settle and report; denying releases the reservation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDecisionResponse'
+        '400':
+          description: >-
+            `idempotency_key` is missing from the body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: '`denied`. Nothing was executed.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDecisionResponse'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          description: The budget or spend token does not belong to this agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/agent/payment_intents/simulate:
+    post:
+      tags: [Payment intents]
+      operationId: simulatePaymentIntent
+      summary: Simulate a payment
+      description: Evaluates without reserving or recording anything. Always `200`.
+      security:
+        - AgentKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [budget_id, amount_cents]
+              properties:
+                budget_id:
+                  type: string
+                  format: uuid
+                amount_cents:
+                  type: integer
+                  minimum: 1
+                counterparty:
+                  type: string
+                  nullable: true
+                trace_id:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: The decision that would have been produced.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Decision'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+
+  /v1/agent/payment_intents/{id}:
+    get:
+      tags: [Payment intents]
+      operationId: getPaymentIntent
+      summary: Read a payment intent
+      security:
+        - AgentKey: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The payment intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFoundForAgent'
+
+  /v1/agent/payment_intents/{id}/complete:
+    post:
+      tags: [Payment intents]
+      operationId: completePaymentIntent
+      summary: Report that the money moved
+      description: |
+        Your rail settled the payment. Moves the intent from `pending` to `executed` and
+        keeps the reservation spent.
+
+        Reporting is not optional. An intent left `pending` holds its budget until the
+        budget closes.
+      security:
+        - AgentKey: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The executed intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFoundForAgent'
+        '422':
+          description: >-
+            The intent is not in a state that can be settled. Only `pending` intents
+            settle, so a payment still held for a person is refused here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/agent/payment_intents/{id}/fail:
+    post:
+      tags: [Payment intents]
+      operationId: failPaymentIntent
+      summary: Report that it did not
+      description: >-
+        Your rail refused or errored. Moves the intent to `failed` and releases the
+        reservation back to the budget.
+      security:
+        - AgentKey: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: >-
+                    Your own description of what went wrong. Stored verbatim as
+                    `failure_reason`. Defaults to `execution_failed`.
+                  example: rail_declined
+      responses:
+        '200':
+          description: The failed intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentEnvelope'
+        '401':
+          $ref: '#/components/responses/AgentUnauthorized'
+        '404':
+          $ref: '#/components/responses/NotFoundForAgent'
+        '422':
+          description: The intent is not in a state that can be failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/cosign/consume:
+    post:
+      tags: [Cosignatures]
+      operationId: consumeCosignature
+      summary: Verify a cosignature and spend it
+      description: |
+        Unauthenticated. Does everything `verify` does, and then marks the authority spent
+        so the same cosignature cannot be presented twice.
+
+        Use this when you are the executor and you are about to act. `verify` answers "is
+        this good?"; `consume` answers "is this good, and it is mine now". A second call
+        with the same cosignature reports `already_settled`.
+
+        Send the token either as the body field `authorization` or as an
+        `Authorization: Bearer <jwt>` header.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                authorization:
+                  type: string
+                  description: The cosignature JWT. May be sent as a bearer header instead.
+                consumed_by:
+                  type: string
+                  description: >-
+                    Optional label for whoever spent it, recorded on the consumption.
+      responses:
+        '200':
+          description: The signature was valid and the authority is now spent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CosignatureVerificationValid'
+        '400':
+          description: No cosignature was supplied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            The cosignature did not verify, or the authority was already spent. `reason`
+            says which.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CosignatureVerificationInvalid'
+
+  /v1/cosign/verify:
+    post:
+      tags: [Cosignatures]
+      operationId: verifyCosignature
+      summary: Verify a cosignature
+      description: |
+        Unauthenticated. Checks the signature and, beyond that, whether the underlying
+        intent is still spendable and still carries the amount the token claims.
+
+        That statefulness is the reason to use this endpoint rather than local
+        verification: a signature proves authority was granted, not that it has not
+        already been used. An intent that has already been spent reports `already_settled`.
+
+        For the hot path, verify offline against the JWKS instead. This endpoint is for
+        when you need settlement state.
+
+        Send the token either as the body field `authorization` or as an
+        `Authorization: Bearer <jwt>` header.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                authorization:
+                  type: string
+                  description: The cosignature JWT. May be sent as a bearer header instead.
+      responses:
+        '200':
+          description: The signature is valid and the intent is still spendable.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CosignatureVerificationValid'
+        '422':
+          description: >-
+            The cosignature did not verify. `reason` says why.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CosignatureVerificationInvalid'
+              example:
+                data:
+                  valid: false
+                  reason: already_settled
+        '400':
+          description: No token was supplied in the body or the header.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: authorization is required
+                  code: authorization_required
+
+  /.well-known/jwks.json:
+    get:
+      tags: [Cosignatures]
+      operationId: getJwks
+      summary: Cosignature public keys
+      description: |
+        The public keys for offline cosignature verification. Unauthenticated, unthrottled,
+        and cacheable.
+
+        Retired keys stay published and keep verifying; they simply stop signing. A
+        cosignature issued a minute before a rotation still checks out.
+
+        When cosigning is not configured on a deployment this returns an empty key set
+        rather than an error, and decisions come back with no `cosignature` field rather
+        than an unverifiable one.
+      security: []
+      responses:
+        '200':
+          description: A JWKS document.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kty: { type: string, example: EC }
+                        crv: { type: string, example: P-256 }
+                        use: { type: string, example: sig }
+                        alg: { type: string, example: ES256 }
+                        kid: { type: string }
+                        x: { type: string }
+                        y: { type: string }
+
+  /v1/workspaces:
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaces
+      summary: List your workspaces
+      description: >-
+        Every workspace the caller is a member of. This is the one list on the control
+        plane that is not paginated.
+      security:
+        - IdentityToken: []
+      responses:
+        '200':
+          description: Your workspaces.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Workspace'
+        '401':
+          $ref: '#/components/responses/IdentityUnauthorized'
+    post:
+      tags: [Workspaces]
+      operationId: createWorkspace
+      summary: Create a workspace
+      description: The caller becomes its `owner`.
+      security:
+        - IdentityToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Acme Procurement
+                slug:
+                  type: string
+                  description: Derived from `name` when omitted.
+                  example: acme-procurement
+      responses:
+        '201':
+          description: The new workspace.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Workspace'
+        '401':
+          $ref: '#/components/responses/IdentityUnauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /v1/workspaces/{workspace_slug}:
+    get:
+      tags: [Workspaces]
+      operationId: getWorkspace
+      summary: Read a workspace
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      responses:
+        '200':
+          description: The workspace, with your role and capabilities.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Workspace'
+        '401':
+          $ref: '#/components/responses/IdentityUnauthorized'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    delete:
+      tags: [Workspaces]
+      operationId: deleteWorkspace
+      summary: Delete a workspace
+      description: >-
+        Requires the `manage_members` capability. You must echo the slug back in `confirm`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  description: Must equal the workspace slug exactly.
+      responses:
+        '204':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          description: '`confirm` did not match the slug.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/export:
+    get:
+      tags: [Workspaces]
+      operationId: exportWorkspace
+      summary: Export a workspace
+      description: >-
+        A full JSON dump of the workspace: agents, policies, policy modules, budgets,
+        spend tokens, action and payment intents, audit events, memberships, webhook
+        endpoints, entitlement grants and the subscription. Requires `manage_members`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      responses:
+        '200':
+          description: The export.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      workspace:
+                        $ref: '#/components/schemas/Workspace'
+                      exported_at: { type: string, format: date-time }
+                      counts: { type: object, additionalProperties: { type: integer } }
+                    additionalProperties: true
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/agents:
+    get:
+      tags: [Agents]
+      operationId: listAgents
+      summary: List agents
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of agents, newest first.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/IdentityUnauthorized'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    post:
+      tags: [Agents]
+      operationId: createAgent
+      summary: Create an agent
+      description: |
+        Requires the `manage_policy` capability.
+
+        The response carries `api_key` exactly once. Kordio stores only a digest and
+        compares it in constant time; if you lose the key, rotate the agent.
+
+        Creating an agent consumes plan headroom, and creating a `live` agent requires a
+        plan with live mode. Either limit returns `422`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: procurement agent
+                mode:
+                  type: string
+                  enum: [test, live]
+                  default: test
+                status:
+                  type: string
+                  enum: [active, suspended, revoked]
+                  default: active
+                scopes:
+                  type: array
+                  items: { type: string }
+                  description: >-
+                    Which action types this key may even ask about. An exact match
+                    (`payment.create`), a namespace wildcard (`payment.*`), or `*`. An
+                    empty array means unrestricted.
+                  example: ["payment.*", "tool.invoke"]
+      responses:
+        '201':
+          description: The agent, including its plaintext key.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/Agent'
+                      - type: object
+                        properties:
+                          api_key:
+                            type: string
+                            description: Shown exactly once, at creation.
+                            example: krt_test_9f3a1c7e42b8d05a6e1f8c3d
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          description: Validation failed, or a plan limit was reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/agents/{id}:
+    get:
+      tags: [Agents]
+      operationId: getAgent
+      summary: Read an agent
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The agent. Never includes the key.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Agent'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    patch:
+      tags: [Agents]
+      operationId: updateAgent
+      summary: Update an agent
+      description: |
+        Requires `manage_policy`. Use this to suspend, revoke, or re-scope an agent.
+
+        Suspending stops new authorizations and leaves history intact. Revoking is
+        permanent. Neither rewrites decisions already made, and neither invalidates a
+        cosignature already issued, which stays verifiable until it expires.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                status:
+                  type: string
+                  enum: [active, suspended, revoked]
+                scopes:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: The updated agent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Agent'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /v1/workspaces/{workspace_slug}/policies:
+    get:
+      tags: [Policies]
+      operationId: listPolicies
+      summary: List policies
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - name: agent_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of policies.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Policy'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    post:
+      tags: [Policies]
+      operationId: createPolicy
+      summary: Create a policy
+      description: |
+        Requires `manage_policy`.
+
+        A policy carries two things: typed spend columns for the common cases, and a
+        general `rules` array. The columns are desugared into rules at compile time, so
+        they are shorthand, not a separate mechanism.
+
+        Everything is validated when you write it, never when an agent is waiting. An
+        unknown rule kind, a missing setting, or an import naming a module that does not
+        exist all fail here with a `422`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyWrite'
+            examples:
+              typedColumns:
+                summary: The common cases, using the typed columns
+                value:
+                  agent_id: 7d2a6c15-3f89-4b02-9e64-8a15d7c0b3f2
+                  per_transaction_cap_cents: 50000
+                  approval_threshold_cents: 20000
+                  velocity_cap_cents: 200000
+                  velocity_window_seconds: 3600
+              rules:
+                summary: The general rules array
+                value:
+                  agent_id: 7d2a6c15-3f89-4b02-9e64-8a15d7c0b3f2
+                  mode: allowlist
+                  imports: ["vendor-allowlist"]
+                  rules:
+                    - kind: cost_cap
+                      max_cents: 50000
+                      rule_name: per_payment_ceiling
+                    - kind: rate_limit
+                      max_actions: 40
+                      window_seconds: 3600
+                    - kind: condition
+                      effect: deny
+                      rule_name: engineering_vendors_only
+                      when:
+                        all_of:
+                          - field: action_type
+                            operator: starts_with
+                            value: "payment."
+                          - not:
+                              field: resource
+                              operator: in
+                              value: ["api.openai.com", "api.anthropic.com"]
+      responses:
+        '201':
+          description: The policy, with a stable `id` assigned to every rule.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Policy'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          description: A rule did not compile, or an import named an unknown module.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/policies/{id}:
+    get:
+      tags: [Policies]
+      operationId: getPolicy
+      summary: Read a policy
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The policy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Policy'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    patch:
+      tags: [Policies]
+      operationId: updatePolicy
+      summary: Update a policy
+      description: Requires `manage_policy`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyWrite'
+      responses:
+        '200':
+          description: The updated policy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Policy'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /v1/workspaces/{workspace_slug}/policy_modules:
+    get:
+      tags: [Policy modules]
+      operationId: listPolicyModules
+      summary: List policy modules
+      description: Sorted by name, ascending.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/Limit'
+        - name: starting_after
+          in: query
+          description: >-
+            The `name` of the last module on the previous page. Modules paginate by name,
+            not by id.
+          schema: { type: string }
+      responses:
+        '200':
+          description: A page of modules.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PolicyModule'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    post:
+      tags: [Policy modules]
+      operationId: createPolicyModule
+      summary: Create a policy module
+      description: |
+        Requires `manage_policy`.
+
+        A module is a named rule set scoped to the workspace. Policies import it by name
+        and its rules compile in ahead of their own.
+
+        Editing a module changes every policy that imports it. Modules cannot import other
+        modules, so composition is one level deep and cannot cycle.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+                  description: Lowercase, dash separated. Unique per workspace.
+                  example: vendor-allowlist
+                description:
+                  type: string
+                  nullable: true
+                rules:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PolicyRule'
+      responses:
+        '201':
+          description: The module.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PolicyModule'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /v1/workspaces/{workspace_slug}/policy_modules/{name}:
+    get:
+      tags: [Policy modules]
+      operationId: getPolicyModule
+      summary: Read a policy module
+      description: Modules are addressed by `name`, not by id.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PolicyModuleName'
+      responses:
+        '200':
+          description: The module.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PolicyModule'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    patch:
+      tags: [Policy modules]
+      operationId: updatePolicyModule
+      summary: Update a policy module
+      description: >-
+        Requires `manage_policy`. `name` is ignored on update; a module cannot be renamed
+        while policies reference it.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PolicyModuleName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description: { type: string, nullable: true }
+                rules:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PolicyRule'
+      responses:
+        '200':
+          description: The updated module.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PolicyModule'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      tags: [Policy modules]
+      operationId: deletePolicyModule
+      summary: Delete a policy module
+      description: >-
+        Requires `manage_policy`. A module still imported by a policy will not delete.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PolicyModuleName'
+      responses:
+        '204':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          description: The module is still imported by at least one policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: Module vendor-allowlist is still imported by 2 policies
+                  code: null
+
+  /v1/workspaces/{workspace_slug}/policy_previews:
+    post:
+      tags: [Policy previews]
+      operationId: createPolicyPreview
+      summary: Preview a draft policy
+      description: |
+        Evaluate a policy you have not saved against a synthetic action, and get back the
+        decision it would produce.
+
+        Nothing is persisted: no policy, no session, no intent, and no audit event. This is
+        the call behind a "what would this do?" affordance in your own console.
+
+        Requires only the `read` capability, deliberately. Previewing is not a mutation.
+
+        `imports` resolve against the workspace's real saved modules, so you can preview a
+        draft that builds on modules already in place.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, action_type]
+              properties:
+                agent_id: { type: string, format: uuid }
+                action_type: { type: string, example: payment.create }
+                resource: { type: string, nullable: true }
+                cost_cents: { type: integer, example: 75000 }
+                metadata:
+                  type: object
+                  additionalProperties: true
+                session_budget_cents:
+                  type: integer
+                  default: 100000
+                  description: The synthetic session budget to evaluate against.
+                policy:
+                  $ref: '#/components/schemas/PolicyDraft'
+      responses:
+        '200':
+          description: The decision the draft would produce.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Decision'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          description: The draft policy did not validate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/funds:
+    get:
+      tags: [Funds]
+      operationId: getFunds
+      summary: Read workspace funds
+      description: |
+        Committed, held and available spend across every active session in the workspace,
+        plus what the ledger has caught up on.
+
+        `unprojected_cents` is the gap between what the control layer has committed and
+        what the ledger has posted. It is normally near zero and transiently non-zero while
+        projections settle.
+
+        If the ledger is unavailable this degrades rather than failing: `ledger_ready` comes
+        back `false`, `accounts` is empty, and the control-plane figures are still correct.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      responses:
+        '200':
+          description: The funds summary. Not paginated; a single object.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Funds'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/budgets:
+    get:
+      tags: [Budgets]
+      operationId: listWorkspaceSessions
+      summary: List budgets
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - name: agent_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of budgets.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Session'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/budgets/{id}:
+    get:
+      tags: [Budgets]
+      operationId: getWorkspaceSession
+      summary: Read a budget
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The budget.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionEnvelope'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/spend_tokens:
+    get:
+      tags: [Spend tokens]
+      operationId: listSpendTokens
+      summary: List spend tokens
+      description: Read-only. Tokens are minted on the agent side only.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - name: budget_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of spend tokens.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SpendToken'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/spend_tokens/{id}:
+    get:
+      tags: [Spend tokens]
+      operationId: getSpendToken
+      summary: Read a spend token
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The spend token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendTokenEnvelope'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/action_intents:
+    get:
+      tags: [Approvals]
+      operationId: listActionIntents
+      summary: List action intents
+      description: >-
+        Filter by `state=requires_approval` for the approval queue.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - name: agent_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: budget_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [pending, requires_approval, completed, failed, denied]
+        - name: action_type
+          in: query
+          schema: { type: string }
+        - name: agent_mode
+          in: query
+          description: >-
+            Narrow to intents whose agent runs in this mode. Any other value is a `400`,
+            rather than a silent full listing.
+          schema:
+            type: string
+            enum: [live, test]
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of action intents.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ActionIntent'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/action_intents/{id}:
+    get:
+      tags: [Approvals]
+      operationId: getActionIntent
+      summary: Read an action intent
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The action intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionIntentEnvelope'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/action_intents/{id}/impact:
+    get:
+      tags: [Approvals]
+      operationId: getActionIntentImpact
+      summary: What approving this would do
+      description: |
+        Everything an approver needs to decide, before they click: the amount, the rule that
+        held it, the budget it draws on, how much comes back if it is denied, how
+        many other holds compete for the same budget, and every window it consumes.
+
+        Budget is already reserved while an intent is held, so approving costs no further
+        headroom. `returns_on_deny_cents` is what denying gives back.
+
+        An approver who only sees "approve $2,400?" is rubber-stamping. This is the call
+        that fixes that.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The impact summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ApprovalImpact'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/action_intents/{id}/approve:
+    post:
+      tags: [Approvals]
+      operationId: approveActionIntent
+      summary: Approve a held action
+      description: |
+        Requires the `approve` capability.
+
+        Moves the intent from `requires_approval` to `pending`. It does **not** execute
+        anything. The agent still executes and still reports the outcome with `complete` or
+        `fail`.
+
+        Records `resolved_by_sub` and emits `approval.resolved`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The approved intent, now `pending`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionIntentEnvelope'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          description: The intent is not in `requires_approval`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/action_intents/{id}/deny:
+    post:
+      tags: [Approvals]
+      operationId: denyActionIntent
+      summary: Deny a held action
+      description: >-
+        Requires `approve`. Moves the intent to `denied` and releases the reserved budget
+        back to the budget.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Defaults to `approval_denied`.
+      responses:
+        '200':
+          description: The denied intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionIntentEnvelope'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          description: The intent is not in `requires_approval`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/payment_intents:
+    get:
+      tags: [Approvals]
+      operationId: listPaymentIntents
+      summary: List payment intents
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - name: agent_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: budget_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [pending, requires_approval, executed, failed, denied]
+        - name: agent_mode
+          in: query
+          description: >-
+            Narrow to intents whose agent runs in this mode. Any other value is a `400`,
+            rather than a silent full listing.
+          schema:
+            type: string
+            enum: [live, test]
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of payment intents.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PaymentIntent'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/payment_intents/{id}:
+    get:
+      tags: [Approvals]
+      operationId: getWorkspacePaymentIntent
+      summary: Read a payment intent
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The payment intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentEnvelope'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/payment_intents/{id}/impact:
+    get:
+      tags: [Approvals]
+      operationId: getPaymentIntentImpact
+      summary: What approving this payment would do
+      description: >-
+        The same summary as the action-intent impact call, plus the spend token the payment
+        cites, if any.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The impact summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ApprovalImpact'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/payment_intents/{id}/approve:
+    post:
+      tags: [Approvals]
+      operationId: approvePaymentIntent
+      summary: Approve a held payment
+      description: |
+        Requires `approve`.
+
+        This grants authority; it does not move money. The intent returns to `pending` and
+        the agent settles it on its own rail, exactly as it does for an approved action.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The released payment intent, now `pending`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentEnvelope'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          description: The intent is not in `requires_approval`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/payment_intents/{id}/deny:
+    post:
+      tags: [Approvals]
+      operationId: denyPaymentIntent
+      summary: Deny a held payment
+      description: >-
+        Requires `approve`. Releases the reservation and enqueues the ledger release.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: The denied payment intent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentEnvelope'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+        '422':
+          description: The intent is not in `requires_approval`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/audit_events:
+    get:
+      tags: [Audit events]
+      operationId: listAuditEvents
+      summary: List audit events
+      description: |
+        The append-only record of everything the control layer did. Every role can read it,
+        including `member`. An audit trail only some people can see is not much of one.
+
+        Filter by `trace_id` to pull the whole story of one action across authorization,
+        approval and outcome.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - name: subject_type
+          in: query
+          schema:
+            type: string
+            enum: [Session, SpendToken, ActionIntent, PaymentIntent, Policy, PolicyModule, Agent, Workspace, WorkspaceMembership, WorkspaceInvitation, Subscription]
+        - name: subject_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: trace_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of audit events, newest first.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AuditEvent'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/audit_events/{id}:
+    get:
+      tags: [Audit events]
+      operationId: getAuditEvent
+      summary: Read an audit event
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The audit event.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AuditEvent'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/webhook_endpoints:
+    get:
+      tags: [Webhook endpoints]
+      operationId: listWebhookEndpoints
+      summary: List webhook endpoints
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of endpoints. Secrets are never returned here.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/WebhookEndpoint'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    post:
+      tags: [Webhook endpoints]
+      operationId: createWebhookEndpoint
+      summary: Create a webhook endpoint
+      description: |
+        Requires `manage_policy`.
+
+        The response carries `secret` exactly once. Store it immediately; if you lose it,
+        rotate the endpoint.
+
+        An empty `enabled_events` array subscribes to **every** event type. Name the ones
+        you handle instead.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: https://app.example.com/webhooks/kordio
+                status:
+                  type: string
+                  enum: [active, disabled]
+                  default: active
+                enabled_events:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/WebhookEventType'
+                  example: [action.requires_approval, approval.resolved]
+      responses:
+        '201':
+          description: The endpoint, including its signing secret.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/WebhookEndpoint'
+                      - type: object
+                        properties:
+                          secret:
+                            type: string
+                            description: Shown exactly once.
+                            example: whsec_4bSFH1YTkjwsgiMrHMwWJfJTIzsov60WxxsziZAE
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          description: The URL is malformed, or an event name is not recognised.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/webhook_endpoints/{id}:
+    get:
+      tags: [Webhook endpoints]
+      operationId: getWebhookEndpoint
+      summary: Read a webhook endpoint
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The endpoint.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WebhookEndpoint'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    delete:
+      tags: [Webhook endpoints]
+      operationId: deleteWebhookEndpoint
+      summary: Delete a webhook endpoint
+      description: Requires `manage_policy`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '204':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/webhook_endpoints/{id}/rotate:
+    post:
+      tags: [Webhook endpoints]
+      operationId: rotateWebhookEndpointSecret
+      summary: Rotate a signing secret
+      description: >-
+        Requires `manage_policy`. Returns a new `secret`, once. The previous secret stops
+        verifying immediately.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: The endpoint with its new secret.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/WebhookEndpoint'
+                      - type: object
+                        properties:
+                          secret: { type: string }
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/memberships:
+    get:
+      tags: [Members]
+      operationId: listMemberships
+      summary: List members
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of memberships, oldest first.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Membership'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    post:
+      tags: [Members]
+      operationId: createMembership
+      summary: Add a member
+      description: Requires `manage_members`. Consumes plan member headroom.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_sub]
+              properties:
+                user_sub: { type: string }
+                email: { type: string, format: email }
+                role:
+                  $ref: '#/components/schemas/Role'
+      responses:
+        '201':
+          description: The membership.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Membership'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          description: Validation failed, or the plan member limit was reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/memberships/{id}:
+    patch:
+      tags: [Members]
+      operationId: updateMembership
+      summary: Change a member's role
+      description: >-
+        Requires `manage_members`. A change that would leave the workspace with no owner is
+        refused.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: '#/components/schemas/Role'
+      responses:
+        '200':
+          description: The updated membership.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Membership'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          description: The change would leave the workspace ownerless.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Members]
+      operationId: deleteMembership
+      summary: Remove a member
+      description: Requires `manage_members`. Removing the last owner is refused.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '204':
+          description: Removed.
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          description: This is the last owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/invitations:
+    get:
+      tags: [Members]
+      operationId: listInvitations
+      summary: List open invitations
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/StartingAfter'
+      responses:
+        '200':
+          description: A page of open invitations.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Invitation'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+    post:
+      tags: [Members]
+      operationId: createInvitation
+      summary: Invite someone
+      description: >-
+        Requires `manage_members`. A new invitation for an email with an open one
+        supersedes it.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                role:
+                  $ref: '#/components/schemas/Role'
+      responses:
+        '201':
+          description: The invitation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Invitation'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          description: That person is already a member.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/invitations/{id}:
+    delete:
+      tags: [Members]
+      operationId: revokeInvitation
+      summary: Revoke an invitation
+      description: Requires `manage_members`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '204':
+          description: Revoked.
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/invitations/lookup:
+    get:
+      tags: [Members]
+      operationId: lookupInvitation
+      summary: Look up an invitation
+      description: >-
+        Resolve an invitation token before accepting it, so your UI can show what is being
+        joined and whether the signed-in account matches.
+      security:
+        - IdentityToken: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The invitation preview.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      workspace_name: { type: string }
+                      workspace_slug: { type: string }
+                      email: { type: string }
+                      role: { $ref: '#/components/schemas/Role' }
+                      expires_at: { type: string, format: date-time }
+                      signed_in_as: { type: string, nullable: true }
+                      matches_account: { type: boolean }
+                      already_member: { type: boolean }
+        '404':
+          description: Unknown token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: The invitation was already accepted, revoked, or has expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/invitations/accept:
+    post:
+      tags: [Members]
+      operationId: acceptInvitation
+      summary: Accept an invitation
+      security:
+        - IdentityToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '201':
+          description: The membership you now hold.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      workspace_slug: { type: string }
+                      role: { $ref: '#/components/schemas/Role' }
+        '422':
+          description: The invitation is no longer open.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/billing:
+    get:
+      tags: [Billing]
+      operationId: getBilling
+      summary: Read plan and entitlements
+      description: >-
+        The current plan, subscription, entitlement usage, prepaid volume, and the plan
+        catalogue. Console-facing; agents never call this.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      responses:
+        '200':
+          description: The billing overview.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BillingOverview'
+        '404':
+          $ref: '#/components/responses/WorkspaceNotFound'
+
+  /v1/workspaces/{workspace_slug}/billing/checkout:
+    post:
+      tags: [Billing]
+      operationId: startBillingCheckout
+      summary: Start a plan checkout
+      description: >-
+        Requires `manage_members`. Returns a hosted checkout URL, or, if the workspace is
+        already subscribed, changes the plan in place.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:
+                  type: string
+                  enum: [sandbox, build, growth, scale, enterprise]
+                email: { type: string, format: email }
+      responses:
+        '201':
+          description: A checkout URL, or confirmation that the plan changed in place.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - type: object
+                        properties:
+                          checkout_url: { type: string, format: uri }
+                          checkout_id: { type: string }
+                          plan: { type: string }
+                      - type: object
+                        properties:
+                          plan_changed: { type: boolean }
+                          plan: { type: string }
+                          status: { type: string }
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+
+  /v1/workspaces/{workspace_slug}/billing/packs:
+    post:
+      tags: [Billing]
+      operationId: buyVolumePack
+      summary: Buy prepaid volume
+      description: Requires `manage_members`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [units]
+              properties:
+                units:
+                  type: integer
+                  minimum: 1
+                  maximum: 200
+                email: { type: string, format: email }
+      responses:
+        '201':
+          description: A checkout URL for the pack.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      checkout_url: { type: string, format: uri }
+                      checkout_id: { type: string }
+                      units: { type: integer }
+                      volume_cents: { type: integer }
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+
+  /v1/workspaces/{workspace_slug}/billing/portal:
+    post:
+      tags: [Billing]
+      operationId: openBillingPortal
+      summary: Open the billing portal
+      description: Requires `manage_members`.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      responses:
+        '200':
+          description: A portal URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      portal_url: { type: string, format: uri }
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+        '422':
+          description: The workspace has never been billed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/workspaces/{workspace_slug}/billing/cancel:
+    post:
+      tags: [Billing]
+      operationId: cancelSubscription
+      summary: Cancel the subscription
+      description: >-
+        Requires `manage_members`. Cancels at period end; the plan keeps entitling until
+        then.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      responses:
+        '200':
+          description: The updated billing overview.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BillingOverview'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+
+  /v1/workspaces/{workspace_slug}/billing/refresh:
+    post:
+      tags: [Billing]
+      operationId: refreshBilling
+      summary: Re-sync billing state
+      description: >-
+        Requires `manage_members`. Pulls the current subscription from the billing provider
+        rather than waiting for the next webhook.
+      security:
+        - IdentityToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlug'
+      responses:
+        '200':
+          description: The refreshed billing overview.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BillingOverview'
+        '403':
+          $ref: '#/components/responses/InsufficientRole'
+
+components:
+
+  securitySchemes:
+    AgentKey:
+      type: http
+      scheme: bearer
+      description: >-
+        An agent API key, `krt_live_…` or `krt_test_…`, shown exactly once at creation.
+        Kordio stores only a digest. This credential can ask for authorization and can
+        never write policy.
+    IdentityToken:
+      type: http
+      scheme: bearer
+      description: >-
+        An identity bearer token for a person or your backend. Capabilities are per member,
+        per workspace. This credential can manage the workspace and can never authorize an
+        action as an agent.
+
+  parameters:
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Unique per action, scoped to the agent. A replay returns the original intent and
+        the original decision, at the original status, rather than reserving budget twice.
+      schema:
+        type: string
+        example: order-4471-attempt-1
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WorkspaceSlug:
+      name: workspace_slug
+      in: path
+      required: true
+      schema: { type: string }
+      example: acme-procurement
+    PolicyModuleName:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      example: vendor-allowlist
+    Limit:
+      name: limit
+      in: query
+      description: Page size. Defaults to 50, clamped to 1..200.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    StartingAfter:
+      name: starting_after
+      in: query
+      description: >-
+        The `id` of the last record on the previous page. An unknown or foreign id is
+        ignored and returns the first page.
+      schema: { type: string, format: uuid }
+
+  responses:
+    AgentUnauthorized:
+      description: Missing (`runtime_key_required`) or unrecognised (`invalid_runtime_key`) agent key.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              message: Agent key is required
+              code: runtime_key_required
+    IdentityUnauthorized:
+      description: Missing or invalid identity token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFoundForAgent:
+      description: >-
+        The record does not belong to this agent. Kordio does not confirm existence across
+        a tenancy boundary, so this is a `404` rather than a `403`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    WorkspaceNotFound:
+      description: >-
+        The workspace does not exist, or you are not a member of it. These are deliberately
+        indistinguishable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InsufficientRole:
+      description: Your membership does not carry the capability this call requires.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              message: Insufficient role
+              code: insufficient_role
+    ValidationFailed:
+      description: The request was understood but cannot be applied.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: >-
+        Too many requests. Back off per the `Retry-After` header. Agent endpoints allow
+        1200 requests per minute per key; workspace endpoints allow 300.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              message: Rate limit exceeded
+              code: rate_limited
+
+  schemas:
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message]
+          properties:
+            message:
+              type: string
+              description: For humans. Do not switch on it.
+            code:
+              type: string
+              nullable: true
+              description: >-
+                Stable where present, `null` otherwise. Only a defined set of failures carry
+                a code.
+              enum:
+                - runtime_key_required
+                - invalid_runtime_key
+                - identity_token_required
+                - invalid_identity_token
+                - budget_ceiling
+                - parent_budget_exhausted
+                - already_consumed
+                - idempotency_conflict
+                - insufficient_role
+                - idempotency_key_required
+                - authorization_required
+                - rate_limited
+                - billing_unavailable
+                - invalid_signature
+                - identity_unavailable
+                - identity_not_configured
+                - mfa_required
+                - email_verification_required
+
+    ListEnvelope:
+      type: object
+      required: [data, has_more, next_cursor]
+      properties:
+        data:
+          type: array
+          items: { type: object }
+        has_more:
+          type: boolean
+          description: >-
+            True when the page filled to the limit. A final page that exactly fills the
+            limit still reports `true`; the next request returns an empty page.
+        next_cursor:
+          type: string
+          nullable: true
+          description: Pass back as `starting_after`.
+
+    Decision:
+      type: object
+      required: [outcome, rule, detail, headroom]
+      properties:
+        outcome:
+          type: string
+          enum: [allowed, denied, requires_approval]
+        rule:
+          type: string
+          nullable: true
+          description: >-
+            The rule that produced this outcome, `null` when allowed with nothing to
+            report. Rules from the typed policy columns surface under their column name:
+            `per_transaction_cap`, `velocity_cap`, `monthly_cap`, `counterparty_allowlist`,
+            `approval_threshold`. Rules written in the `rules` array surface under their
+            `rule_name`, defaulting to the rule kind.
+          examples:
+            - per_transaction_cap
+            - session_budget
+            - agent_scope
+            - session_inactive
+            - no_policy
+            - not_allowlisted
+            - spend_token_ceiling
+        detail:
+          type: object
+          additionalProperties: true
+          description: The numbers behind the decision, keyed by what the rule cared about.
+        headroom:
+          type: object
+          additionalProperties: { type: integer }
+          description: >-
+            What is left on every limit that applied, reduced to the tightest value per
+            key. Give it to your agent: one that knows it has $380 left picks a cheaper
+            vendor, one that only knows it was refused retries into the same wall.
+        policy_snapshot:
+          type: array
+          items: { type: object, additionalProperties: true }
+          description: The compiled policies as they stood when this decision was made.
+
+    ActionRequest:
+      type: object
+      required: [budget_id, action_type]
+      properties:
+        budget_id:
+          type: string
+          format: uuid
+          description: An active session belonging to this agent.
+        action_type:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'
+          description: Lowercase, dot separated.
+          example: payment.create
+        resource:
+          type: string
+          nullable: true
+          description: The counterparty or target. Matched by allowlists.
+          example: acme-supplies.example
+        cost_cents:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Minor units. Omit or `0` for an action that spends nothing.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: >-
+            Any dot path here is addressable from the condition language as `metadata.*`.
+        trace_id:
+          type: string
+          nullable: true
+          description: Yours if you have one, generated otherwise. Links the whole audit trail.
+
+    ActionIntent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        budget_id: { type: string, format: uuid }
+        action_type: { type: string }
+        resource: { type: string, nullable: true }
+        cost_cents: { type: integer }
+        currency: { type: string }
+        state:
+          type: string
+          enum: [pending, requires_approval, completed, failed, denied]
+        idempotency_key: { type: string }
+        trace_id: { type: string, nullable: true }
+        ledger_transaction_id: { type: string, nullable: true }
+        failure_reason: { type: string, nullable: true }
+        resolved_by_sub:
+          type: string
+          nullable: true
+          description: The identity that approved or denied this, when a person did.
+        resolved_at: { type: string, format: date-time, nullable: true }
+        decision:
+          type: object
+          additionalProperties: true
+          nullable: true
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ActionIntentEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ActionIntent'
+
+    ActionDecisionResponse:
+      type: object
+      required: [data, decision]
+      properties:
+        data:
+          $ref: '#/components/schemas/ActionIntent'
+        decision:
+          $ref: '#/components/schemas/Decision'
+        cosignature:
+          type: string
+          description: >-
+            A compact ES256 JWS over the authorization. Present only when the outcome is
+            `allowed` and cosigning is configured; the key is absent otherwise, never
+            `null`.
+
+    PaymentIntent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        budget_id: { type: string, format: uuid }
+        spend_token_id: { type: string, format: uuid, nullable: true }
+        amount_cents: { type: integer }
+        currency: { type: string }
+        counterparty: { type: string, nullable: true }
+        state:
+          type: string
+          enum: [pending, requires_approval, executed, failed, denied]
+        failure_reason: { type: string, nullable: true }
+        resolved_by_sub: { type: string, nullable: true }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        idempotency_key: { type: string }
+        trace_id: { type: string, nullable: true }
+        ledger_transaction_id: { type: string, nullable: true }
+        decision_context: { type: object, additionalProperties: true, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PaymentIntentEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentIntent'
+
+    PaymentDecisionResponse:
+      type: object
+      required: [data, decision]
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentIntent'
+        decision:
+          $ref: '#/components/schemas/Decision'
+        cosignature:
+          type: string
+
+    Session:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        parent_budget_id: { type: string, format: uuid, nullable: true }
+        budget_cents: { type: integer }
+        spent_cents: { type: integer }
+        remaining_cents: { type: integer }
+        currency: { type: string }
+        status:
+          type: string
+          enum: [active, exhausted, closed]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SessionEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Session'
+
+    SpendToken:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        budget_id: { type: string, format: uuid }
+        amount_ceiling_cents: { type: integer }
+        counterparty: { type: string, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
+        status:
+          type: string
+          enum: [issued, consumed, expired, void]
+        consumed_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SpendTokenEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/SpendToken'
+
+    Agent:
+      type: object
+      properties:
+        max_budget_cents:
+          type: integer
+          nullable: true
+          description: >-
+            The largest budget this agent may open, in minor units. Set from the
+            dashboard only. Null means the agent chooses its own, which is the
+            default for agents created before ceilings existed.
+          example: 50000
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status:
+          type: string
+          enum: [active, suspended, revoked]
+        mode:
+          type: string
+          enum: [test, live]
+        scopes:
+          type: array
+          items: { type: string }
+        api_key_prefix:
+          type: string
+          description: The first 12 characters of the key, for identifying it in a list.
+          example: krt_test_9f3
+        last_used_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PolicyRule:
+      type: object
+      required: [kind]
+      description: >-
+        One rule. Every kind accepts an optional `rule_name`, echoed back as
+        `decision.rule`, and an optional stable `id` assigned on write if you do not supply
+        one. Every kind except `action_allowlist` accepts `action_types` to scope the rule;
+        an empty array means all action types.
+      properties:
+        id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum:
+            - action_allowlist
+            - resource_allowlist
+            - cost_cap
+            - spend_window
+            - monthly_spend_cap
+            - rate_limit
+            - approval_threshold
+            - condition
+        rule_name:
+          type: string
+          description: Defaults to the kind name.
+        action_types:
+          type: array
+          items: { type: string }
+        allow:
+          type: array
+          items: { type: string }
+          description: >-
+            For `action_allowlist` and `resource_allowlist`. An empty array is a no-op, not
+            a deny-all.
+        max_cents:
+          type: integer
+          description: For `cost_cap`, `spend_window`, `monthly_spend_cap`.
+        window_seconds:
+          type: integer
+          minimum: 1
+          description: For `spend_window` and `rate_limit`.
+        max_actions:
+          type: integer
+          minimum: 1
+          description: >-
+            For `rate_limit`. Counts every action, not just spend, which is what catches a
+            loop that costs nothing per call.
+        above_cents:
+          type: integer
+          description: For `approval_threshold`. Holds rather than refuses.
+        effect:
+          type: string
+          enum: [allow, deny, require_approval]
+          default: deny
+          description: For `condition`.
+        when:
+          $ref: '#/components/schemas/ConditionExpression'
+
+    ConditionExpression:
+      type: object
+      description: |
+        A boolean expression over the action. Combinators are `all_of`, `any_of` and `not`,
+        nestable to ten levels; an empty `all_of` or `any_of` is rejected at write time.
+
+        A leaf is `{field, operator, value}`.
+
+        Fields are `action_type`, `resource`, `cost_cents`, `currency`, `agent_id`,
+        `agent_mode`, `budget_id`, and any `metadata.*` dot path. A missing field never
+        raises; it simply fails to match. Unknown fields and operators are rejected when the
+        policy is written, never when an agent is waiting.
+
+        The ordered comparisons (`gt`, `gte`, `lt`, `lte`) are numeric. A non-numeric
+        operand makes the comparison `false` rather than an error.
+      properties:
+        all_of:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ConditionExpression'
+        any_of:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ConditionExpression'
+        not:
+          $ref: '#/components/schemas/ConditionExpression'
+        field:
+          type: string
+          example: metadata.preapproved
+        operator:
+          type: string
+          enum: [eq, ne, gt, gte, lt, lte, in, not_in, contains, starts_with, ends_with, exists]
+        value:
+          description: Omitted or null for operators that do not need one.
+
+    PolicyDraft:
+      type: object
+      description: The policy shape, without an agent binding. Used for previews.
+      properties:
+        mode:
+          type: string
+          enum: [blocklist, allowlist]
+          default: blocklist
+          description: >-
+            `blocklist` permits unless a rule denies. `allowlist` inverts it: denied unless
+            an `allow` rule matches, reported as `not_allowlisted`. Each allowlist policy is
+            an independent gate, so attaching two means both must be satisfied. A `deny`
+            still overrides an `allow`.
+        per_transaction_cap_cents: { type: integer, nullable: true }
+        velocity_window_seconds: { type: integer, nullable: true }
+        velocity_cap_cents: { type: integer, nullable: true }
+        approval_threshold_cents: { type: integer, nullable: true }
+        monthly_cap_cents: { type: integer, nullable: true }
+        counterparty_allowlist:
+          type: array
+          items: { type: string }
+        imports:
+          type: array
+          items: { type: string }
+          description: Policy module names. Their rules compile in ahead of `rules`.
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyRule'
+
+    PolicyWrite:
+      allOf:
+        - type: object
+          properties:
+            agent_id:
+              type: string
+              format: uuid
+              description: Required on create.
+            status:
+              type: string
+              enum: [active, disabled]
+              default: active
+        - $ref: '#/components/schemas/PolicyDraft'
+
+    Policy:
+      allOf:
+        - $ref: '#/components/schemas/PolicyDraft'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            agent_id: { type: string, format: uuid }
+            status:
+              type: string
+              enum: [active, disabled]
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+
+    PolicyModule:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyRule'
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ApprovalImpact:
+      type: object
+      properties:
+        amount_cents: { type: integer }
+        currency: { type: string }
+        rule:
+          type: string
+          nullable: true
+          description: The rule that held this intent.
+        executed:
+          type: boolean
+          description: Always false. Nothing has run yet.
+        session:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            budget_cents: { type: integer }
+            spent_cents: { type: integer }
+            remaining_cents: { type: integer }
+            returns_on_deny_cents:
+              type: integer
+              description: What denying gives back to the budget.
+            open_holds:
+              type: integer
+              description: How many other held intents compete for this same budget.
+        agent:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            mode: { type: string, enum: [test, live] }
+            scopes: { type: array, items: { type: string } }
+        windows:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { type: string, enum: [velocity, monthly] }
+              window_seconds: { type: integer, nullable: true }
+              cap_cents: { type: integer }
+              spent_cents: { type: integer }
+              remaining_cents: { type: integer }
+        spend_token:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            amount_ceiling_cents: { type: integer }
+            counterparty: { type: string, nullable: true }
+            expires_at: { type: string, format: date-time, nullable: true }
+            single_use: { type: boolean }
+
+    Funds:
+      type: object
+      properties:
+        available_cents:
+          type: integer
+          description: Unspent budget across every active session.
+        held_cents:
+          type: integer
+          description: Reserved by intents waiting on a person.
+        committed_cents:
+          type: integer
+          description: Spent across active budgets, as the control layer sees it.
+        ledger_committed_cents:
+          type: integer
+          description: Posted to the ledger.
+        unprojected_cents:
+          type: integer
+          description: >-
+            `committed_cents - ledger_committed_cents`, floored at zero. Spend the ledger
+            has not caught up on yet.
+        currency: { type: string }
+        ledger_ready:
+          type: boolean
+          description: >-
+            False when the ledger is disabled, the workspace has no ledger, or the call
+            failed. The control-plane figures above stay correct either way.
+        by_agent:
+          type: array
+          items:
+            type: object
+            properties:
+              agent_id: { type: string, format: uuid }
+              agent_name: { type: string }
+              ledger_account: { type: string, example: "spend:7d2a6c15-3f89-4b02-9e64-8a15d7c0b3f2" }
+              committed_cents: { type: integer }
+              held_cents: { type: integer }
+              currency: { type: string }
+
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        subject_type: { type: string }
+        subject_id: { type: string, format: uuid }
+        action:
+          type: string
+          description: What happened.
+          enum:
+            - action.allowed
+            - action.denied
+            - action.requires_approval
+            - action.completed
+            - action.failed
+            - action.simulated
+            - payment_intent.allowed
+            - payment_intent.denied
+            - payment_intent.requires_approval
+            - payment_intent.executed
+            - payment_intent.failed
+            - approval.granted
+            - approval.denied
+            - session.created
+            - spend_token.issued
+            - spend_token.expired
+            - policy.created
+            - policy.updated
+            - policy_module.created
+            - policy_module.updated
+            - policy_module.deleted
+            - agent.created
+            - membership.created
+            - membership.role_changed
+            - membership.removed
+            - invitation.created
+            - invitation.revoked
+            - invitation.accepted
+            - workspace.created
+            - billing.checkout.started
+            - billing.pack.started
+            - billing.plan.changed
+            - billing.subscription.cancel_requested
+        trace_id: { type: string, nullable: true }
+        snapshot:
+          type: object
+          additionalProperties: true
+          description: The state captured at the moment of the event.
+        created_at: { type: string, format: date-time }
+
+    WebhookEventType:
+      type: string
+      enum:
+        - action.requires_approval
+        - action.completed
+        - action.failed
+        - payment.requires_approval
+        - payment.executed
+        - payment.failed
+        - approval.resolved
+        - budget.low
+        - spend_token.expired
+
+    WebhookEndpoint:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        enabled_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEventType'
+        status:
+          type: string
+          enum: [active, disabled]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Role:
+      type: string
+      enum: [owner, admin, member]
+      default: member
+      description: >-
+        `owner` carries read, approve, manage_policy and manage_members. `admin` carries
+        read, approve and manage_policy. `member` carries read.
+
+    Workspace:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        role:
+          $ref: '#/components/schemas/Role'
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum: [read, approve, manage_policy, manage_members]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Membership:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_sub: { type: string }
+        email: { type: string, nullable: true }
+        role:
+          $ref: '#/components/schemas/Role'
+        capabilities:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Invitation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        role:
+          $ref: '#/components/schemas/Role'
+        status: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    CosignatureVerificationValid:
+      type: object
+      properties:
+        valid: { type: boolean, const: true }
+        reason: { type: string, nullable: true }
+        intent_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        action_type: { type: string }
+        resource: { type: string, nullable: true }
+        amount_cents: { type: integer }
+        currency: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    CosignatureVerificationInvalid:
+      type: object
+      properties:
+        valid: { type: boolean, const: false }
+        reason:
+          type: string
+          enum:
+            - malformed
+            - unknown_key
+            - expired
+            - wrong_issuer
+            - not_yet_valid
+            - bad_signature
+            - unknown_intent
+            - already_settled
+            - amount_mismatch
+
+    BillingOverview:
+      type: object
+      properties:
+        configured:
+          type: boolean
+          description: Whether billing is wired up on this deployment.
+        plan: { type: string }
+        subscription:
+          type: object
+          nullable: true
+          additionalProperties: true
+        entitlements:
+          type: object
+          description: >-
+            Per-dimension `{limit, used, remaining}` for agents, members,
+            payment_authorizations, action_authorizations and gated_volume, plus
+            `live_mode`, `overage_cents`, `audit_retention_days` and the period bounds.
+          additionalProperties: true
+        prepaid:
+          type: object
+          additionalProperties: true
+        plans:
+          type: array
+          items:
+            type: object
+            additionalProperties: true

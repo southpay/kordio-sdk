@@ -1,0 +1,4078 @@
+openapi: 3.1.0
+info:
+  title: Kordio Ledger API
+  version: "v1"
+  summary: Double-entry ledger as a service.
+  description: |
+    A double-entry ledger you can call over HTTP. Every write balances
+    per currency, is idempotent by client key, and is append-only.
+    Corrections are reversal transactions, not edits.
+
+    This is one of two APIs on `api.kordio.io`. The other is the
+    [spend control API](https://docs.kordio.io/agents/api-reference/introduction),
+    which governs what AI agents may spend. They share a host and nothing else:
+    different credentials, different envelopes, different pagination.
+
+    New here? Start with the
+    [ledger quickstart](https://docs.kordio.io/ledger/quickstart).
+
+    ### Response envelope
+
+    Every successful response is shaped as:
+
+    ```json
+    { "data": { "object": "<type>", ... }, "livemode": false, "request_id": "req_..." }
+    ```
+
+    Lists are flat (Stripe convention):
+
+    ```json
+    { "object": "list", "data": [...], "has_more": false, "next_cursor": null,
+      "livemode": false, "request_id": "req_..." }
+    ```
+
+    Errors:
+
+    ```json
+    { "error": { "code": "...", "message": "...", "hint": "...", "docs_url": "...",
+                 "request_id": "req_..." },
+      "livemode": false, "request_id": "req_..." }
+    ```
+
+    `request_id` is also returned on the `X-Request-Id` header.
+
+    ### Modes
+
+    Each OAuth client is registered as `test` or `live`. The mode is
+    encoded into the token and surfaced as the top-level `livemode`
+    boolean on every response. Test and live datasets are operationally
+    distinct: no `?test=true` flag, no leakage.
+
+    ### Idempotency
+
+    Required on writes. Same `(ledger_id, Idempotency-Key)` always
+    returns the original transaction, forever. Header or body, your
+    choice. Header wins if both are present.
+
+    ### Rate limits
+
+    Limits are enforced per OAuth client, separately for read and write
+    requests. Every response carries `X-RateLimit-Limit`,
+    `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until the
+    window resets). When a client exceeds its limit the request is
+    rejected with `429` and a `Retry-After` header giving the number of
+    seconds to wait before retrying.
+
+    ### Ledger selection
+
+    Every ledger-scoped endpoint (everything under `/v1/` except
+    `/v1/ledgers`, `/v1/organizations`, and the OAuth endpoints) needs
+    to know which ledger to operate on. The ledger is resolved from,
+    in order: the access token's `ledger_id` claim, the `X-Ledger-Id`
+    request header, or a `ledger_id` path parameter. List your ledgers
+    via `GET /v1/ledgers`.
+  contact:
+    name: Kordio engineering
+    email: support@kordio.io
+    url: https://docs.kordio.io
+  license:
+    name: Proprietary
+    url: https://kordio.io/terms-and-conditions
+
+servers:
+  - url: https://api.kordio.io
+    description: Production
+  - url: http://localhost:4000/api
+    description: Local development
+
+security:
+  - oauth2_read: [ledger:read]
+  - oauth2_write: [ledger:write]
+
+tags:
+  - name: Authentication
+    description: |
+      OAuth 2.0 client_credentials. Every machine call needs a Bearer
+      token; humans get one through the dashboard, services mint their
+      own.
+  - name: Accounts
+    description: |
+      Named buckets of value. Caller-chosen IDs (`cash:usd`,
+      `accounts_receivable:acme`, `revenue:subscriptions`), caller-chosen
+      currencies (`USD`, `USDC`, `BTC`, `POINTS`, anything goes), one of
+      five accounting types.
+  - name: Transactions
+    description: |
+      Balanced sets of postings. The unit of mutation. Reverse with
+      `POST /v1/transactions/:id/reverse`; mutate `metadata` only with
+      `PATCH`.
+  - name: Postings
+    description: |
+      The atomic ledger entry. Always part of a transaction, never
+      created or modified standalone.
+  - name: Events
+    description: |
+      Same payloads webhooks deliver. The events log is the audit trail
+      of every state-changing operation.
+  - name: Webhooks
+    description: |
+      Endpoints that receive signed event payloads. Signatures are
+      `HMAC-SHA256(secret, "<timestamp>.<raw_body>")` carried in the
+      `Kordio-Signature` header.
+
+      A delivery is considered successful on any 2xx response. Failures
+      (non-2xx, timeout, or network error) are retried with exponential
+      backoff at 30s, 5m, 1h, 6h, and 24h, for a maximum of 5 attempts;
+      after the 5th failure the delivery is marked dead and not retried.
+  - name: Reports
+    description: |
+      Read-only financial reports. Trial balance for tenant health,
+      per-account statement for a period, point-in-time balance via
+      `?at=<ts>` on the balance endpoint.
+  - name: Reserves
+    description: |
+      Sweep / release / claw funds held against a counterparty.
+      Reserves are accounts with `account_kind = "restricted"` and a
+      `counterparty_ref`; listing and balance reads use the standard
+      `/v1/accounts` surface. New event types `reserve.swept`,
+      `reserve.released`, `reserve.clawed`.
+  - name: Reconciliation
+    description: |
+      Match external system snapshots (custody balances, settlement
+      confirmations, blockchain receipts) against unreconciled
+      postings. Mark matched postings as reconciled with an external
+      reference.
+  - name: Sources
+    description: |
+      Named external systems and their ingested external transactions.
+      Push statement rows once, idempotently, then run reconciliation
+      per source. `GET /v1/external_transactions?status=open` is the
+      break list.
+  - name: Periods
+    description: |
+      Close and reopen accounting periods. A closed period rejects new
+      postings whose `value_date` falls inside it, enforced both at
+      the application layer and at the database via trigger.
+  - name: Ledgers
+    description: |
+      A ledger is a single namespace of accounts, transactions, and
+      postings, bound to one mode (test/live). Most resources are
+      scoped to a ledger.
+  - name: Organizations
+    description: |
+      Top-level tenant container. Owns ledgers, members, invitations.
+      Org-scoped endpoints don't require `X-Ledger-Id`.
+  - name: System
+    description: Health, metadata, discovery.
+
+components:
+
+  securitySchemes:
+    oauth2_read:
+      type: oauth2
+      description: |
+        OAuth 2.0 client_credentials grant. Send `client_id:client_secret`
+        as HTTP Basic, or as form fields. Tokens are HS256 JWTs valid for
+        one hour (configurable). Decode them at jwt.io.
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token
+          scopes:
+            ledger:read: Read accounts, balances, transactions, postings, events
+            ledger:clients:read: List and inspect OAuth clients (no secrets)
+    oauth2_write:
+      type: oauth2
+      description: Same flow; `ledger:write` is required for any mutation.
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token
+          scopes:
+            ledger:write: Create / patch / reverse / commit transactions and accounts; manage webhook endpoints
+            ledger:clients:write: Create, rotate and delete OAuth clients
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        pattern: "^[A-Za-z0-9_:.\\-]+$"
+        example: pi_acme_1234_capture
+      description: |
+        Required on writes. Stable identifier you choose. The same key
+        always returns the same transaction, forever. Can also be supplied as
+        `idempotency_key` in the request body. Header wins.
+
+        Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
+        Max 255 bytes. Replays of an accepted key return the original
+        response with header `Idempotent-Replayed: true` so callers can
+        tell a replay from a freshly-committed result.
+
+    LedgerId:
+      name: X-Ledger-Id
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+      description: |
+        Identifies the ledger the request operates on. Required for all
+        ledger-scoped endpoints (everything except `/v1/ledgers`,
+        `/v1/organizations`, and OAuth). May also be carried as a
+        `ledger_id` claim in the access token. When both are present
+        the token claim wins. The ledger's mode (test/live) determines
+        the response `livemode`.
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+      description: |
+        Opaque token from a prior page's `next_cursor`. Do not decode or
+        construct cursors client-side; their encoding is implementation
+        detail and may change between releases. Cursors are stable for
+        the resources they reference (a cursor pointing at a deleted /
+        anonymized resource still paginates correctly. It points at a
+        position, not at a row). No documented TTL; treat cursors as
+        valid until the next forward-incompatible API change.
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+
+    Expand:
+      name: expand
+      in: query
+      required: false
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          type: string
+          enum: [postings.account, balances]
+      description: |
+        Comma-separated. `postings.account` inlines each posting's
+        account object; `balances` adds the post-commit balance of every
+        touched account.
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          examples:
+            default:
+              value:
+                error:
+                  code: not_found
+                  message: account not found
+                  param: id
+                  docs_url: https://docs.kordio.io/errors#not_found
+
+    Unbalanced:
+      description: The transaction does not balance per currency.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          examples:
+            default:
+              value:
+                error:
+                  code: unbalanced
+                  message: debits and credits must net to zero per currency
+                  hint: "USDC: add 9700 of credits or remove 9700 of debits"
+                  details:
+                    by_currency: { USDC: "9700" }
+                  docs_url: https://docs.kordio.io/errors#unbalanced
+
+    Immutable:
+      description: A non-metadata field cannot be updated.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          examples:
+            default:
+              value:
+                error:
+                  code: immutable_field
+                  message: field cannot be updated
+                  param: postings
+                  hint: only metadata is mutable; write a reversal to undo a transaction
+                  docs_url: https://docs.kordio.io/errors#immutable_field
+
+    InsufficientScope:
+      description: The token is valid but lacks the scope this endpoint needs.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+          example: 'Bearer error="insufficient_scope", scope="ledger:write"'
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          examples:
+            default:
+              value:
+                error:
+                  code: insufficient_scope
+                  message: this endpoint requires the 'ledger:write' scope
+                  hint: request a token with `scope=ledger:write` from POST /oauth/token
+                  docs_url: https://docs.kordio.io/errors#insufficient_scope
+
+  schemas:
+
+    # Inner-resource discriminator. Every resource carries `object` (Stripe
+    # convention). The wire envelope adds `livemode` and `request_id` at
+    # the top level (see `Envelope` and `ListEnvelope` below).
+    EnvelopeFields:
+      type: object
+      properties:
+        object:
+          type: string
+          description: Discriminator naming the shape of this resource (e.g. `account`, `transaction`).
+          example: account
+
+    # Single-resource response envelope.
+    Envelope:
+      type: object
+      required: [data, livemode, request_id]
+      properties:
+        data:
+          type: object
+          description: The resource. Inspect `data.object` for its type.
+        livemode:
+          type: boolean
+          description: True when the resolved ledger is live. Derived from the access token's ledger claim.
+          example: false
+        request_id:
+          type: string
+          description: |
+            Echoes the `X-Request-Id` response header. Include in support
+            tickets so we can find the exact request.
+          example: req_3LhM8XKx9q4hQv
+
+    # Cursor-paginated list envelope. Pagination meta is flat at the top
+    # level (Stripe convention) so auto-paginating SDKs don't have to peek
+    # under nested keys.
+    ListEnvelope:
+      type: object
+      required: [object, data, has_more, livemode, request_id]
+      properties:
+        object: { type: string, enum: [list] }
+        data:
+          type: array
+          items: { type: object }
+        has_more: { type: boolean }
+        next_cursor: { type: string, nullable: true }
+        total:
+          type: integer
+          nullable: true
+          description: Present only when the caller passed `?include_total=true`.
+        livemode: { type: boolean, example: false }
+        request_id: { type: string, example: req_3LhM8XKx9q4hQv }
+
+    AccountInput:
+      type: object
+      required: [id, type, currency, name]
+      properties:
+        id:
+          type: string
+          description: |
+            Caller-chosen string. Stable; cannot be renamed. Unique
+            within your tenant. Convention: `<purpose>:<scope>` (e.g.
+            `accounts_receivable:acme`).
+          example: accounts_receivable:acme
+          pattern: '^[a-zA-Z0-9_:.\-]+$'
+        name:
+          type: string
+          example: Acme payable
+        type:
+          type: string
+          enum: [asset, liability, revenue, expense, equity]
+          example: liability
+        currency:
+          type: string
+          description: |
+            ISO 4217 fiat ticker, crypto/token symbol, or any string of
+            your own (`POINTS`, `GIFT_CARD`). Pinned per account; cannot
+            be changed. Normalized to uppercase when ticker-shaped.
+          example: USDC
+        overdraft_policy:
+          type: string
+          enum: [allowed, none]
+          default: allowed
+          description: |
+            `allowed` lets the account go to any balance; `none` rejects
+            postings that would drive available below `-overdraft_limit`.
+            Default `allowed` for backward compatibility.
+        overdraft_limit:
+          type: string
+          description: |
+            Maximum negative-balance allowance, in minor units. Stored
+            as `numeric(38, 0)`. Returned as a JSON string for amounts
+            beyond JavaScript's safe-integer range.
+          example: "0"
+        fund_classification:
+          type: string
+          enum: [client_held, operator, neutral]
+          description: |
+            Optional funds-segregation grouping. Defaults to `neutral`
+            when omitted, or inherits the account's template value.
+        custody_provider:
+          type: string
+          description: |
+            Optional custody-system identifier. Paired with
+            `custody_external_id`: both or neither.
+          example: fireblocks
+        custody_external_id:
+          type: string
+          description: Provider-specific identifier; paired with `custody_provider`.
+          example: vault_42
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            counterparty: acme
+            tier: standard
+
+    Account:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, id, type, currency]
+          properties:
+            object: { type: string, enum: [account] }
+            id: { type: string, example: accounts_receivable:acme }
+            name: { type: string, example: Acme payable }
+            type:
+              type: string
+              enum: [asset, liability, revenue, expense, equity]
+              example: liability
+            currency: { type: string, example: USDC }
+            currency_decimals:
+              type: integer
+              nullable: true
+              description: 6 for USDC, 8 for BTC, 18 for ETH; `null` for unknown.
+              example: 6
+            currency_kind:
+              type: string
+              nullable: true
+              enum: [fiat, crypto, stablecoin, null]
+              example: stablecoin
+            unknown_currency:
+              type: boolean
+              description: True if `currency` isn't in our metadata registry. The ledger still works.
+              example: false
+            overdraft_policy:
+              type: string
+              enum: [allowed, none]
+              example: allowed
+            overdraft_limit:
+              type: string
+              description: Numeric string. Always nonneg.
+              example: "0"
+            account_kind:
+              type: string
+              enum: [standard, restricted]
+              default: standard
+              description: |
+                `restricted` is set by the platform on accounts created via
+                `POST /v1/reserves`. Customers can also pass it explicitly
+                to model reserves they build by hand.
+            counterparty_ref:
+              type: string
+              nullable: true
+              description: |
+                Opaque, customer-defined identifier of the counterparty a
+                reserve account is held against. Set automatically by
+                `POST /v1/reserves`; ignored on non-reserve accounts.
+              example: acme
+            fund_classification:
+              type: string
+              enum: [client_held, operator, neutral]
+              default: neutral
+              description: |
+                Customer-set grouping for funds segregation reporting.
+                The platform does not interpret this beyond grouping
+                accounts in `GET /v1/reports/fund_segregation`. Inherited
+                from the account's template when omitted on create.
+            custody_provider:
+              type: string
+              nullable: true
+              description: |
+                Opaque custody-system identifier (e.g. `fireblocks`,
+                `anchorage`). Paired with `custody_external_id`: both
+                set or both null.
+              example: fireblocks
+            custody_external_id:
+              type: string
+              nullable: true
+              description: |
+                Provider-specific identifier (vault id, account id, etc.).
+                Paired with `custody_provider`.
+              example: vault_42
+            metadata: { type: object, additionalProperties: true }
+            created_at: { type: string, format: date-time, example: "2026-05-14T10:23:45.123456Z" }
+
+    ReserveSweepInput:
+      type: object
+      required: [source_account_id, template, counterparty_ref, currency, amount]
+      properties:
+        source_account_id:
+          type: string
+          description: Account whose balance is debited to fund the reserve.
+          example: payable:acme
+        template:
+          type: string
+          description: |
+            Name of a registered `account_template` whose
+            `accounting_type` matches the reserve's intended sign
+            (typically `liability` with `balance_non_negative: true`).
+          example: merchant_payable
+        counterparty_ref:
+          type: string
+          description: Opaque customer-defined identifier of the counterparty the reserve is held for.
+          example: acme
+        currency:
+          type: string
+          description: Currency of the sweep. Must equal the source account's currency.
+          example: USDC
+        amount:
+          oneOf:
+            - { type: string, pattern: '^\d+$' }
+            - { type: integer, minimum: 1 }
+          description: Amount in minor units to sweep into the reserve. Accepts a decimal string (recommended) or an integer on write.
+          example: "500000"
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Informational only. Persisted in transaction metadata so a
+            customer-side scheduler can find expired reserves and POST
+            `/release`; the platform does NOT auto-release.
+        idempotency_key:
+          type: string
+          description: Optional body alternative to the `Idempotency-Key` header. Header wins.
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ReserveReleaseInput:
+      type: object
+      required: [amount, target_account_id]
+      properties:
+        target_account_id:
+          type: string
+          description: Account that receives the released funds. Often the original source.
+        amount:
+          oneOf:
+            - { type: string, pattern: '^\d+$' }
+            - { type: integer, minimum: 1 }
+          description: Amount in minor units to release, as a decimal string (recommended) or an integer on write. Must be <= the reserve's posted balance.
+        idempotency_key: { type: string }
+        metadata: { type: object, additionalProperties: true }
+
+    ReserveClawInput:
+      type: object
+      required: [amount, operator_account_id, reason_code]
+      properties:
+        operator_account_id:
+          type: string
+          description: Operator account where clawed funds land (revenue, write-off, etc.).
+        amount:
+          oneOf:
+            - { type: string, pattern: '^\d+$' }
+            - { type: integer, minimum: 1 }
+          description: Amount in minor units to claw back, as a decimal string (recommended) or an integer on write.
+        reason_code:
+          type: string
+          description: Free-text audit reason; persisted in transaction metadata.
+          example: chargeback_lost
+        idempotency_key: { type: string }
+        metadata: { type: object, additionalProperties: true }
+
+    ReserveOpResult:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, reserve_account_id, transaction_id, balance]
+          properties:
+            object: { type: string, enum: [reserve_op_result] }
+            reserve_account_id: { type: string, example: "reserve:merchant_payable:acme:usdc" }
+            transaction_id: { type: string, format: uuid }
+            balance:
+              type: string
+              pattern: '^-?\d+$'
+              description: Reserve posted balance after this op, in minor units, as a decimal string. Parse with a big-integer or decimal type, never a JS number.
+              example: "500000"
+            remaining_balance:
+              type: string
+              pattern: '^-?\d+$'
+              description: Alias of `balance`; preserved for symmetry with the decision-doc contract. Decimal string of minor units.
+              example: "500000"
+
+    ReservesOutstandingReport:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, ledger_id, entries, totals_by_currency]
+          properties:
+            object: { type: string, enum: [reserves_outstanding] }
+            ledger_id: { type: string, format: uuid }
+            reserve_account_count: { type: integer, example: 2 }
+            entries:
+              type: array
+              items:
+                type: object
+                required: [counterparty_ref, currency, posted]
+                properties:
+                  counterparty_ref: { type: string, example: acme }
+                  currency: { type: string, example: USDC }
+                  posted: { type: string, pattern: '^-?\d+$', example: "500000", description: "Minor units as a decimal string. Parse with a big-integer or decimal type, never a JS number." }
+            totals_by_currency:
+              type: object
+              additionalProperties: { type: string, pattern: '^-?\d+$' }
+              example: { USDC: "500000" }
+
+    FundSegregationReport:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, report, value_date, by_currency]
+          properties:
+            object: { type: string, enum: [report] }
+            report: { type: string, enum: [fund_segregation] }
+            value_date: { type: string, format: date-time }
+            by_currency:
+              type: array
+              items:
+                type: object
+                required: [currency, client_held_total, custody_held_total, delta, custody_breakdown]
+                properties:
+                  currency: { type: string, example: USDC }
+                  client_held_total:
+                    type: string
+                    pattern: '^-?\d+$'
+                    description: |
+                      Net posted balance across every `fund_classification = "client_held"`
+                      account in this currency, in minor units, as a decimal string.
+                      Parse with a big-integer or decimal type, never a JS number.
+                    example: "1000000"
+                  custody_held_total:
+                    type: string
+                    pattern: '^-?\d+$'
+                    description: |
+                      Net posted balance across every `fund_classification = "operator"`
+                      account that has a `custody_provider` set, in minor units, as a
+                      decimal string. Parse with a big-integer or decimal type, never a JS number.
+                    example: "1000000"
+                  delta:
+                    type: string
+                    pattern: '^-?\d+$'
+                    description: |
+                      `custody_held_total - client_held_total`, in minor units, as a
+                      decimal string. Positive = surplus, negative = shortfall.
+                      Customer interprets the sign per their regulatory regime.
+                      Parse with a big-integer or decimal type, never a JS number.
+                    example: "0"
+                  custody_breakdown:
+                    type: array
+                    items:
+                      type: object
+                      required: [custody_provider, custody_external_id, balance]
+                      properties:
+                        custody_provider: { type: string, example: fireblocks }
+                        custody_external_id: { type: string, example: vault_main }
+                        balance: { type: string, pattern: '^-?\d+$', example: "1000000", description: "Minor units as a decimal string. Parse with a big-integer or decimal type, never a JS number." }
+
+    Balance:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, account, currency, posted, pending, available]
+          properties:
+            object: { type: string, enum: [balance] }
+            account: { type: string, example: accounts_receivable:acme }
+            currency: { type: string, example: USDC }
+            posted:
+              type: string
+              pattern: '^-?\d+$'
+              description: Signed minor units from confirmed postings, as a decimal string. Parse with a big-integer or decimal type, never a JS number.
+              example: "9700000"
+            pending:
+              type: string
+              pattern: '^-?\d+$'
+              description: "Signed minor units from `pending: true` postings, as a decimal string. Parse with a big-integer or decimal type, never a JS number."
+              example: "0"
+            available:
+              type: string
+              pattern: '^-?\d+$'
+              description: posted + pending, as a decimal string. Parse with a big-integer or decimal type, never a JS number.
+              example: "9700000"
+
+    Posting:
+      type: object
+      required: [object, account, amount, currency, direction]
+      properties:
+        object: { type: string, enum: [posting] }
+        id: { type: integer, format: int64, example: 14829 }
+        transaction:
+          oneOf:
+            - { type: string, format: uuid }
+            - { $ref: "#/components/schemas/Transaction" }
+        account:
+          oneOf:
+            - { type: string, example: accounts_receivable:acme }
+            - { $ref: "#/components/schemas/AccountCompact" }
+          description: A string id by default; an Account object when `?expand=postings.account`.
+        amount:
+          type: string
+          pattern: '^-?\d+$'
+          description: Amount in minor units, as a decimal string. Parse with a big-integer or decimal type, never a JS number. 1.00 USDC = "1000000" at 6 decimals.
+          example: "9700000"
+        currency: { type: string, example: USDC }
+        direction:
+          type: string
+          enum: [debit, credit]
+          example: credit
+        pending:
+          type: boolean
+          default: false
+          description: Pending postings don't move the `posted` balance until committed.
+        tags:
+          type: object
+          additionalProperties: { type: string }
+          example: { region: EU, department: sales }
+        value_date: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    AccountCompact:
+      type: object
+      properties:
+        object: { type: string, enum: [account] }
+        id: { type: string }
+        type: { type: string }
+        currency: { type: string }
+
+    PostingInput:
+      type: object
+      required: [account, amount, currency, direction]
+      properties:
+        account:
+          type: string
+          description: Account `id` (must already exist in your tenant).
+          example: cash:usd
+        amount:
+          oneOf:
+            - { type: string, pattern: '^\d+$' }
+            - { type: integer, minimum: 1 }
+          description: |
+            Positive amount in minor units. Accepts a decimal string
+            (recommended, e.g. "10000000") or an integer on write. Stored
+            as `numeric(38, 0)` so 18-decimal tokens (ETH, DAI) past
+            `9.2e18` minor units are fine. Always returned as a string.
+          example: "10000000"
+        currency: { type: string, example: USDC }
+        direction:
+          type: string
+          enum: [debit, credit]
+          example: debit
+        pending:
+          type: boolean
+          default: false
+        tags:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Flat string-to-string map of dimensions for reporting (department,
+            region, project, etc.). Filterable via `?tags[key]=value`.
+          example:
+            department: sales
+            region: EU
+
+    TransactionInput:
+      type: object
+      required: [postings]
+      properties:
+        idempotency_key:
+          type: string
+          description: |
+            Alternative to the `Idempotency-Key` header. Required if header
+            absent. Charset `[A-Za-z0-9_:.-]`, max 255 bytes.
+          example: pi_acme_1234_capture
+          maxLength: 255
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Free-form caller annotations. Mutable via PATCH.
+          example:
+            payment_intent: pi_acme_1234
+            channel: web
+            country: US
+        value_date:
+          type: string
+          format: date-time
+          description: |
+            When the value transferred (vs `booking_date`, which is when
+            we recorded the entry). Used by reports. Defaults to the
+            booking time.
+          example: "2026-05-14T10:00:00Z"
+        postings:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/PostingInput" }
+
+    Transaction:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, id, postings]
+          properties:
+            object: { type: string, enum: [transaction] }
+            id: { type: string, format: uuid, example: "3061ec4e-c959-49ba-a0f6-99186a7bd5d8" }
+            idempotency_key: { type: string, example: pi_acme_1234_capture }
+            reverses:
+              type: string
+              format: uuid
+              nullable: true
+              description: Set when this transaction reverses another.
+            reversed_by:
+              type: string
+              format: uuid
+              nullable: true
+              description: Set when this transaction has been reversed.
+            refunds:
+              type: string
+              format: uuid
+              nullable: true
+              description: Set when this transaction refunds another (partial or full).
+            refund_amount:
+              type: string
+              pattern: '^-?\d+$'
+              nullable: true
+              description: Minor units refunded, as a decimal string. Parse with a big-integer or decimal type, never a JS number. Present only on refund transactions.
+            exchange_rate:
+              type: string
+              nullable: true
+              description: |
+                Decimal string. Present only when the transaction has
+                postings in more than one currency. The rate that was
+                in effect at write time. It is persisted for audit and
+                restatement, never recomputed.
+              example: "1.0823"
+            base_currency:
+              type: string
+              nullable: true
+              description: Currency that the exchange rate quotes from. Set with `exchange_rate`.
+              example: USD
+            quote_currency:
+              type: string
+              nullable: true
+              description: Currency that the exchange rate quotes to. Set with `exchange_rate`.
+              example: USDC
+            metadata:
+              type: object
+              additionalProperties: true
+              example:
+                payment_intent: pi_acme_1234
+                channel: web
+            postings:
+              type: array
+              items: { $ref: "#/components/schemas/Posting" }
+            balances:
+              type: array
+              items: { $ref: "#/components/schemas/Balance" }
+              description: Returned only when `?expand=balances`.
+            value_date: { type: string, format: date-time }
+            booking_date: { type: string, format: date-time }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+
+    DryRun:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, valid, summary]
+          properties:
+            object: { type: string, enum: [dry_run] }
+            valid: { type: boolean, example: true }
+            summary:
+              type: object
+              properties:
+                accounts:
+                  type: array
+                  items: { type: string }
+                totals:
+                  type: object
+                  description: Per-currency debits/credits.
+                  additionalProperties:
+                    type: object
+                    properties:
+                      debit: { type: string, pattern: '^-?\d+$', description: "Minor units as a decimal string. Parse with a big-integer or decimal type, never a JS number." }
+                      credit: { type: string, pattern: '^-?\d+$', description: "Minor units as a decimal string. Parse with a big-integer or decimal type, never a JS number." }
+                  example:
+                    USDC: { debit: "10000000", credit: "10000000" }
+
+    Event:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, id, type, created_at]
+          properties:
+            object: { type: string, enum: [event] }
+            id: { type: string, format: uuid }
+            type:
+              type: string
+              example: transaction.created
+              description: |
+                One of: `account.created`, `account.classification_changed`,
+                `transaction.created`,
+                `transaction.reversal_created`, `transaction.reversed`,
+                `transaction.refund_created`, `transaction.updated`,
+                `transaction.committed`, `oauth_client.created`,
+                `oauth_client.deleted`, `oauth_client.secret_rotated`,
+                `oauth_client.rotated`, `oauth_client.revoked`,
+                `member.invited`, `member.accepted`, `member.role_changed`,
+                `member.revoked`, `tenant.provisioned`,
+                `tenant.suspended`, `tenant.unsuspended`,
+                `webhook_endpoint.secret_rotated`,
+                `reconciliation.break_auto_resolved`.
+
+                Note: `transaction.reversal_created` fires *before*
+                `transaction.reversed` so subscribers rebuilding state
+                from the event tail can apply the create before the
+                link. `transaction.refund_created` fires when a refund
+                transaction is created; payload includes `refunds`
+                (original id) and `refund_amount`.
+            resource_id: { type: string, nullable: true }
+            payload: { type: object, additionalProperties: true }
+            created_at: { type: string, format: date-time }
+
+    WebhookEndpointInput:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          example: https://acme.example.com/webhooks/kordio
+        description: { type: string, example: "Production handler" }
+        enabled_events:
+          type: array
+          items: { type: string }
+          example:
+            - transaction.created
+            - transaction.reversal_created
+            - transaction.refund_created
+            - transaction.reversed
+
+    WebhookEndpoint:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, id, url, active]
+          properties:
+            object: { type: string, enum: [webhook_endpoint] }
+            id: { type: string, format: uuid }
+            url: { type: string, format: uri }
+            description: { type: string }
+            mode: { type: string, enum: [live, test] }
+            active: { type: boolean }
+            enabled_events: { type: array, items: { type: string } }
+            last_delivered_at: { type: string, format: date-time, nullable: true }
+            created_at: { type: string, format: date-time }
+            signing_secret:
+              type: string
+              description: Returned only on create + rotate.
+            signing_secret_note:
+              type: string
+              description: Hint to the integrator that the secret is shown once.
+
+    WebhookDelivery:
+      allOf:
+        - $ref: "#/components/schemas/EnvelopeFields"
+        - type: object
+          required: [object, id, webhook_endpoint_id, event_id, status, attempt]
+          properties:
+            object: { type: string, enum: [webhook_delivery] }
+            id: { type: string, format: uuid }
+            webhook_endpoint_id: { type: string, format: uuid }
+            event_id: { type: string }
+            enqueue_kind:
+              type: string
+              enum: [event, redelivery, test_send]
+              description: How this delivery was created.
+            attempt:
+              type: integer
+              description: How many HTTP attempts this row has made (0 for pending).
+            status:
+              type: string
+              enum: [pending, succeeded, failed]
+              description: |
+                Public delivery state. Internally the DB also carries a
+                `dead` value for terminal failures after all retries
+                exhausted; the API collapses that to `failed`.
+            request_method: { type: string, nullable: true, example: POST }
+            request_url: { type: string, nullable: true }
+            request_headers:
+              type: object
+              additionalProperties: { type: string }
+              nullable: true
+              description: |
+                Outgoing request headers as sent to the integrator's
+                endpoint. Sensitive headers (`authorization`, `*secret*`,
+                `cookie`) are redacted to `[redacted]`. The
+                `Kordio-Signature` header is preserved because it's an
+                HMAC value, not a key.
+            request_body: { type: string, nullable: true }
+            response_status: { type: integer, nullable: true }
+            response_headers:
+              type: object
+              additionalProperties: { type: string }
+              nullable: true
+            response_body: { type: string, nullable: true }
+            response_at: { type: string, format: date-time, nullable: true }
+            next_attempt_at: { type: string, format: date-time, nullable: true }
+            error_message: { type: string, nullable: true }
+            redelivers_delivery_id:
+              type: string
+              format: uuid
+              nullable: true
+              description: "For `enqueue_kind: redelivery`, the source delivery id."
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+
+    # Backwards-compat alias for any path that still references `List`.
+    # Prefer `ListEnvelope` directly.
+    List:
+      $ref: "#/components/schemas/ListEnvelope"
+
+    Export:
+      type: object
+      required: [object, id, status, format, resources]
+      properties:
+        object: { type: string, enum: [export] }
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [pending, running, ready, failed]
+        format: { type: string, enum: [ndjson] }
+        resources:
+          type: array
+          items: { type: string }
+          example: [accounts, transactions, postings, events]
+        download_urls:
+          type: array
+          items: { type: string }
+          description: |
+            Signed URLs valid until `expires_at`. Empty until the
+            worker has uploaded the files.
+        expires_at: { type: string, format: date-time, nullable: true }
+        error_message: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AnonymizationRequest:
+      type: object
+      required: [confirm]
+      properties:
+        confirm:
+          type: string
+          enum: [ANONYMIZE]
+          description: Must equal the literal string `ANONYMIZE`.
+        reason:
+          type: string
+          description: Free-form label, e.g. `gdpr_erasure`, `customer_request`.
+          example: gdpr_erasure
+
+    AnonymizationResult:
+      type: object
+      required: [object, anonymization_id, status]
+      properties:
+        object: { type: string, enum: [anonymization_result] }
+        anonymization_id: { type: string, format: uuid }
+        status: { type: string, enum: [completed] }
+        anonymized_at: { type: string, format: date-time }
+        reason: { type: string, nullable: true }
+
+    OAuthClientInput:
+      type: object
+      required: [name, mode, scopes, ledger_id]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          example: ci-keys
+        mode:
+          type: string
+          enum: [live, test]
+        scopes:
+          type: array
+          items:
+            type: string
+            enum:
+              - ledger:read
+              - ledger:write
+              - ledger:period_close
+              - ledger:clients:read
+              - ledger:clients:write
+          example: [ledger:read, ledger:write]
+        ledger_id:
+          type: string
+          format: uuid
+          description: |
+            Ledger this client is pinned to. Must match `mode`.
+
+    OAuthClient:
+      type: object
+      required: [object, id, name, scopes, mode, active, created_at]
+      properties:
+        object: { type: string, enum: [oauth_client] }
+        id:
+          type: string
+          description: The `client_id`, prefixed `client_`.
+          example: client_3Jx9XfQwVZBfwUyZQ8H6
+        name: { type: string, example: ci-keys }
+        scopes:
+          type: array
+          items: { type: string }
+        mode: { type: string, enum: [live, test] }
+        ledger_id: { type: string, format: uuid, nullable: true }
+        active: { type: boolean }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        client_secret:
+          type: string
+          description: Plaintext secret. Returned only on create + rotate.
+        client_secret_note:
+          type: string
+          description: Hint to the integrator that the secret is shown once.
+        previous_secret_expires_at:
+          type: string
+          format: date-time
+          description: |
+            Returned on rotate. UTC timestamp 24h in the future, until which
+            the previous secret continues to authenticate at `POST /oauth/token`.
+
+    OAuthError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_client, invalid_grant, unauthorized_client, unsupported_grant_type, invalid_scope]
+        error_description: { type: string }
+        error_uri: { type: string }
+        hint: { type: string }
+
+    ErrorResponse:
+      type: object
+      required: [error, livemode, request_id]
+      properties:
+        livemode: { type: boolean, example: false }
+        request_id: { type: string, example: req_3LhM8XKx9q4hQv }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Machine-readable. Stable across versions.
+              enum:
+                - invalid_request
+                - missing_idempotency_key
+                - unauthorized
+                - forbidden
+                - insufficient_scope
+                - invalid_client
+                - invalid_grant
+                - invalid_scope
+                - not_found
+                - unbalanced
+                - currency_mismatch
+                - unknown_account
+                - already_exists
+                - already_reversed
+                - immutable_field
+                - insufficient_funds
+                - period_closed
+                - precondition_failed
+                - duplicate_external_ref
+                - partial_refund_exceeds_original
+                - refund_currency_required
+                - rotation_in_progress
+                - webhook_endpoint_disabled
+                - reserve_insufficient_funds
+                - reserve_currency_mismatch
+                - reserve_release_exceeds_balance
+                - account_template_unknown
+                - invalid_state
+                - unsupported_grant_type
+                - rate_limited
+                - internal_error
+                - tenant_suspended
+                - fresh_authentication_required
+            message:
+              type: string
+              description: Human-readable one-liner.
+            hint:
+              type: string
+              description: Actionable next step.
+            param:
+              type: string
+              nullable: true
+              description: Which request field caused the failure.
+            details:
+              type: object
+              additionalProperties: true
+              description: Code-specific structured detail (e.g. `by_currency` for unbalanced).
+            docs_url:
+              type: string
+              format: uri
+            request_id:
+              type: string
+              description: Echoes the top-level `request_id`. Stripe-compatible placement.
+
+paths:
+
+  # ===========================================================================
+  # System
+  # ===========================================================================
+
+  /healthz:
+    get:
+      tags: [System]
+      summary: Liveness + DB probe
+      security: []
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+                  version: { type: string }
+                  checks:
+                    type: object
+                    properties:
+                      database: { type: boolean }
+              examples:
+                default:
+                  value:
+                    status: ok
+                    version: "0.1.0"
+                    checks: { database: true }
+        "503":
+          description: Degraded (database unreachable)
+
+  /.well-known/oauth-authorization-server:
+    get:
+      tags: [System]
+      summary: RFC 8414 authorization server metadata
+      security: []
+      description: |
+        Discovery document for OAuth clients. Tells tooling where the
+        token endpoint is, what grant types and scopes are supported,
+        what signing algorithms we use.
+      responses:
+        "200":
+          description: Server metadata
+          content:
+            application/json:
+              examples:
+                default:
+                  value:
+                    issuer: https://api.kordio.io
+                    token_endpoint: https://api.kordio.io/oauth/token
+                    grant_types_supported: [client_credentials]
+                    response_types_supported: [token]
+                    scopes_supported: [ledger:read, ledger:write]
+                    token_endpoint_auth_methods_supported: [client_secret_basic, client_secret_post]
+                    token_endpoint_auth_signing_alg_values_supported: [HS256]
+                    service_documentation: https://docs.kordio.io/auth
+
+  # ===========================================================================
+  # Authentication
+  # ===========================================================================
+
+  /oauth/token:
+    post:
+      tags: [Authentication]
+      summary: Issue an access token
+      security: []
+      description: |
+        RFC 6749 §4.4 client_credentials. Authenticate with HTTP Basic
+        (`client_id:client_secret`) **or** with `client_id` and
+        `client_secret` in the form body.
+
+        Tokens are HS256 JWTs valid for one hour. They carry `tenant_id`,
+        `mode`, and the granted `scope`. Decode them at jwt.io to inspect.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [client_credentials]
+                scope:
+                  type: string
+                  description: Space-separated subset of granted scopes. Optional; defaults to all.
+                  example: ledger:read ledger:write
+                client_id: { type: string }
+                client_secret: { type: string }
+            examples:
+              basic-auth:
+                summary: Recommended, credentials via HTTP Basic
+                value:
+                  grant_type: client_credentials
+              form-post:
+                summary: Credentials in the body
+                value:
+                  grant_type: client_credentials
+                  client_id: client_xxxxxxxxxxxxxxxxxxxxxxxx
+                  client_secret: sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      responses:
+        "200":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in]
+                properties:
+                  access_token: { type: string, description: HS256 JWT }
+                  token_type: { type: string, enum: [Bearer] }
+                  expires_in: { type: integer, example: 3600 }
+                  scope: { type: string }
+              examples:
+                default:
+                  value:
+                    access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    token_type: Bearer
+                    expires_in: 3600
+                    scope: ledger:read ledger:write
+        "401":
+          description: invalid_client (bad credentials or disabled client)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+              examples:
+                bad-credentials:
+                  value: { error: invalid_client, error_description: client credentials are invalid }
+                disabled:
+                  value: { error: invalid_client, error_description: client is disabled }
+        "422":
+          description: invalid_request / unsupported_grant_type / invalid_scope
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+
+  # ===========================================================================
+  # Accounts
+  # ===========================================================================
+
+  /v1/accounts:
+    get:
+      tags: [Accounts]
+      summary: List accounts
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+        - name: type
+          in: query
+          required: false
+          schema: { type: string, enum: [asset, liability, revenue, expense, equity] }
+          description: Filter by accounting type.
+        - name: currency
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by currency ticker.
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string, enum: [standard, reserve] }
+          description: |
+            Filter by `account_kind`. Use `kind=reserve` to list reserve
+            accounts, optionally narrowed by `counterparty_ref`.
+        - name: counterparty_ref
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by `counterparty_ref` (typically combined with `kind=reserve`).
+        - name: fund_classification
+          in: query
+          required: false
+          schema: { type: string, enum: [client_held, operator, neutral] }
+          description: Filter by `fund_classification`.
+        - name: custody_provider
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter to accounts tagged with this `custody_provider`.
+      responses:
+        "200":
+          description: A page of accounts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+              examples:
+                default:
+                  value:
+                    object: list
+                    data:
+                      - { object: account, id: accounts_receivable:acme, name: "Acme payable", type: liability, currency: USDC, currency_decimals: 6, currency_kind: stablecoin, unknown_currency: false, metadata: {}, created_at: "2026-05-14T10:23:45.123456Z" }
+                      - { object: account, id: revenue:subscriptions, name: "Fee revenue", type: revenue, currency: USDC, currency_decimals: 6, currency_kind: stablecoin, unknown_currency: false, metadata: {}, created_at: "2026-05-14T09:11:02.000000Z" }
+                    has_more: false
+                    next_cursor: null
+    post:
+      tags: [Accounts]
+      summary: Create an account
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountInput" }
+            examples:
+              merchant-payable:
+                value: { id: accounts_receivable:acme, name: "Acme payable", type: liability, currency: USDC }
+              custom-currency:
+                summary: Arbitrary currency string (loyalty points etc.)
+                value: { id: points:acme, name: "Acme points", type: liability, currency: POINTS }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+              examples:
+                default:
+                  value:
+                    data: { object: account, id: accounts_receivable:acme, name: "Acme payable", type: liability, currency: USDC, currency_decimals: 6, currency_kind: stablecoin, unknown_currency: false, metadata: {}, created_at: "2026-05-14T10:23:45.123456Z" }
+                    livemode: false
+                    request_id: req_3LhM8XKx9q4hQv
+        "403": { $ref: "#/components/responses/InsufficientScope" }
+        "409":
+          description: An account with this `id` already exists in your tenant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                default:
+                  value:
+                    error:
+                      code: already_exists
+                      message: an account with this id already exists
+                      param: id
+                      hint: pick a different id, or PATCH the existing account to update its metadata
+                      docs_url: https://docs.kordio.io/errors#already_exists
+        "422":
+          description: invalid_request (missing or malformed fields).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                missing-name:
+                  value:
+                    error:
+                      code: invalid_request
+                      message: account is invalid
+                      hint: name is required and must be a non-empty string
+                      details: { fields: { name: ["can't be blank"] } }
+                      docs_url: https://docs.kordio.io/errors#invalid_request
+
+  /v1/accounts/{id}:
+    get:
+      tags: [Accounts]
+      summary: Get an account
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, example: accounts_receivable:acme }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/accounts/{id}/category_balance:
+    get:
+      tags: [Accounts, Reports]
+      summary: Get the rolled-up balance for an account category
+      description: |
+        Returns the aggregate balance across all accounts under the
+        same category as the addressed account (e.g. the sum of every
+        `accounts_receivable:*` account). Useful for treasury-level
+        dashboards that want a single number per category.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, example: accounts_receivable:acme }
+      responses:
+        "200":
+          description: Rolled-up category balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Balance" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/accounts/{id}/balance:
+    get:
+      tags: [Accounts, Reports]
+      summary: Get an account's balance (current or point-in-time)
+      description: |
+        Pass `?at=<ISO 8601 timestamp>` for a historical balance computed
+        from `value_date` on each posting. Without `at`, returns the
+        current balance from the actor's in-memory state.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, example: accounts_receivable:acme }
+        - name: at
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: ISO 8601 instant. Balance as of that moment.
+          example: "2026-04-15T00:00:00Z"
+      responses:
+        "200":
+          description: Current posted + pending balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Balance" }
+              examples:
+                default:
+                  value:
+                    object: balance
+                    account: accounts_receivable:acme
+                    currency: USDC
+                    posted: "9700000"
+                    pending: "0"
+                    available: "9700000"
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/accounts/{id}/statement:
+    get:
+      tags: [Accounts, Reports]
+      summary: Account statement for a period
+      description: |
+        Opening balance at `from`, every posting in `[from, to)` ordered
+        by `value_date` ascending, closing balance at `to`. The auditor's
+        per-account view.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, example: accounts_receivable:acme }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+          description: Inclusive lower bound on `value_date`.
+          example: "2026-04-01T00:00:00Z"
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+          description: Exclusive upper bound on `value_date`. Defaults to now.
+          example: "2026-05-01T00:00:00Z"
+        - name: limit
+          in: query
+          schema: { type: integer, default: 500, minimum: 1, maximum: 5000 }
+      responses:
+        "200":
+          description: Statement
+          content:
+            application/json:
+              examples:
+                default:
+                  value:
+                    object: account_statement
+                    account: accounts_receivable:acme
+                    currency: USDC
+                    period: { from: "2026-04-01T00:00:00Z", to: "2026-05-01T00:00:00Z" }
+                    opening_balance: { posted: "0", pending: "0", currency: USDC }
+                    closing_balance: { posted: "9700000", pending: "0", currency: USDC }
+                    entries:
+                      - { object: posting, id: 1, account: accounts_receivable:acme, amount: "9700000", currency: USDC, direction: credit, pending: false, tags: {}, running_balance: "9700000", value_date: "2026-04-15T10:00:00Z", created_at: "2026-04-15T10:00:00Z" }
+                    entry_count: 1
+                    truncated: false
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/accounts/{id}/postings:
+    get:
+      tags: [Accounts, Postings]
+      summary: List postings on an account
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, example: accounts_receivable:acme }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+        - name: tags
+          in: query
+          style: deepObject
+          explode: true
+          schema: { type: object, additionalProperties: { type: string } }
+          description: |
+            Filter by posting tags. Example: `?tags[region]=EU&tags[department]=sales`.
+            All clauses ANDed.
+      responses:
+        "200":
+          description: A page of postings, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+
+  # ===========================================================================
+  # Transactions
+  # ===========================================================================
+
+  /v1/transactions:
+    get:
+      tags: [Transactions]
+      summary: List transactions
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Expand" }
+        - name: metadata
+          in: query
+          style: deepObject
+          explode: true
+          schema: { type: object, additionalProperties: { type: string } }
+          description: |
+            Filter by metadata values. Example:
+            `?metadata[payment_intent]=pi_acme_1234`.
+      responses:
+        "200":
+          description: A page of transactions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+    post:
+      tags: [Transactions]
+      summary: Create a transaction
+      description: |
+        Write a balanced set of postings. Replays of the same
+        `Idempotency-Key` return the original transaction with status 200.
+
+        Set `?dry_run=true` to validate without writing: no idempotency
+        key required, no events emitted, no balance changes.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/Expand" }
+        - name: dry_run
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionInput" }
+            examples:
+              capture-usdc:
+                summary: Canonical USDC capture (3% fee split)
+                value:
+                  metadata: { payment_intent: pi_acme_1234, channel: web }
+                  postings:
+                    - { account: cash:usd, amount: "10000000", currency: USDC, direction: debit }
+                    - { account: accounts_receivable:acme,    amount: "9700000", currency: USDC, direction: credit }
+                    - { account: revenue:subscriptions,              amount: "300000", currency: USDC, direction: credit }
+              capture-with-swap:
+                summary: BTC inflow swapped to USDC via SwapKit clearing
+                value:
+                  metadata: { payment_intent: pi_acme_btc_001, swap_provider: swapkit }
+                  postings:
+                    - { account: cash:btc,      amount: "500000",   currency: BTC,  direction: debit }
+                    - { account: fx_pool:btc,              amount: "500000",   currency: BTC,  direction: credit }
+                    - { account: fx_pool:usdc,             amount: "30000000", currency: USDC, direction: debit }
+                    - { account: accounts_receivable:acme,    amount: "29100000", currency: USDC, direction: credit }
+                    - { account: revenue:subscriptions,              amount: "900000", currency: USDC, direction: credit }
+              payout:
+                summary: Weekly payout to merchant
+                value:
+                  idempotency_key: payout_acme_w1
+                  metadata: { merchant: acme, rail: onchain, batch: "acme-w1" }
+                  postings:
+                    - { account: accounts_receivable:acme,         amount: "5000000", currency: USDC, direction: debit }
+                    - { account: accounts_payable:onchain:acme, amount: "5000000", currency: USDC, direction: credit }
+      responses:
+        "200":
+          description: Replayed (same `Idempotency-Key` as a prior call).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/Transaction" }
+                  - { $ref: "#/components/schemas/DryRun" }
+              examples:
+                created:
+                  summary: Normal create
+                  value:
+                    object: transaction
+                    id: "3061ec4e-c959-49ba-a0f6-99186a7bd5d8"
+                    idempotency_key: pi_acme_1234_capture
+                    reverses: null
+                    reversed_by: null
+                    metadata: { payment_intent: pi_acme_1234 }
+                    postings:
+                      - { object: posting, id: 1, transaction: "3061ec4e-c959-49ba-a0f6-99186a7bd5d8", account: cash:usd, amount: "10000000", currency: USDC, direction: debit, pending: false, created_at: "2026-05-14T15:53:31.298048Z" }
+                      - { object: posting, id: 2, transaction: "3061ec4e-c959-49ba-a0f6-99186a7bd5d8", account: accounts_receivable:acme,    amount: "9700000", currency: USDC, direction: credit, pending: false, created_at: "2026-05-14T15:53:31.298048Z" }
+                      - { object: posting, id: 3, transaction: "3061ec4e-c959-49ba-a0f6-99186a7bd5d8", account: revenue:subscriptions,              amount: "300000", currency: USDC, direction: credit, pending: false, created_at: "2026-05-14T15:53:31.298048Z" }
+                    created_at: "2026-05-14T15:53:31.291591Z"
+                dry-run:
+                  summary: Dry run, no writes
+                  value:
+                    object: dry_run
+                    valid: true
+                    summary:
+                      accounts: [cash:usd, accounts_receivable:acme, revenue:subscriptions]
+                      totals: { USDC: { debit: "10000000", credit: "10000000" } }
+        "400":
+          description: missing_idempotency_key (required header absent on writes).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403": { $ref: "#/components/responses/InsufficientScope" }
+        "422": { $ref: "#/components/responses/Unbalanced" }
+
+  /v1/transactions/bulk:
+    post:
+      tags: [Transactions]
+      summary: Create many transactions in one call
+      description: |
+        Each item carries its own `idempotency_key`. The header
+        `Idempotency-Key` is ignored on this endpoint; bulk callers
+        must inline keys.
+
+        Returns a `bulk_result` with one entry per input in the same
+        order. Status per entry: `created`, `replayed`, or `error`.
+        On any failure the response status is `207 Multi-Status` (or
+        `201` if every item succeeded).
+
+        **Atomic mode is partial today.** `"atomic": true` flags the
+        intent; failures are still surfaced per-item. Full rollback of
+        prior successes is not implemented yet; reverse them manually
+        if you need rollback semantics. We do not silently drop the
+        request.
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactions]
+              properties:
+                atomic: { type: boolean, default: false }
+                transactions:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  items: { $ref: "#/components/schemas/TransactionInput" }
+            examples:
+              three-captures:
+                value:
+                  transactions:
+                    - idempotency_key: cap_a
+                      postings:
+                        - { account: cash:usd, amount: "10000000", currency: USDC, direction: debit }
+                        - { account: accounts_receivable:acme,    amount: "10000000", currency: USDC, direction: credit }
+                    - idempotency_key: cap_b
+                      postings:
+                        - { account: cash:usd, amount: "5000000", currency: USDC, direction: debit }
+                        - { account: accounts_receivable:acme,    amount: "5000000", currency: USDC, direction: credit }
+      responses:
+        "201":
+          description: All items created
+          content:
+            application/json:
+              examples:
+                default:
+                  value:
+                    object: bulk_result
+                    atomic: false
+                    partial_failure: false
+                    results:
+                      - { idempotency_key: cap_a, status: created, transaction: { object: transaction, id: "...", ... } }
+                      - { idempotency_key: cap_b, status: created, transaction: { object: transaction, id: "...", ... } }
+        "207":
+          description: Partial failure (some items failed).
+          content:
+            application/json:
+              examples:
+                partial:
+                  value:
+                    object: bulk_result
+                    atomic: false
+                    partial_failure: true
+                    results:
+                      - { idempotency_key: cap_a, status: created, transaction: { object: transaction, id: "..." } }
+                      - idempotency_key: cap_b
+                        status: error
+                        error:
+                          code: unbalanced
+                          message: debits and credits must net to zero per currency
+
+  /v1/transactions/lookup:
+    get:
+      tags: [Transactions]
+      summary: Look up a transaction by external reference
+      description: |
+        Returns the transaction that previously recorded a given
+        external reference (e.g. a blockchain tx hash, a custody
+        deposit id, a settlement confirmation id). All three of `rail`,
+        `kind`, `value` are required and form the lookup tuple.
+
+        Use this to verify whether an external event has already been
+        booked before deciding to write a new transaction.
+      parameters:
+        - name: rail
+          in: query
+          required: true
+          schema: { type: string }
+          example: ethereum
+          description: External system / network identifier.
+        - name: kind
+          in: query
+          required: true
+          schema: { type: string }
+          example: tx_hash
+          description: Type of identifier within the rail.
+        - name: value
+          in: query
+          required: true
+          schema: { type: string }
+          example: "0xabc123..."
+          description: The identifier value.
+        - { $ref: "#/components/parameters/Expand" }
+      responses:
+        "200":
+          description: Matching transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "400":
+          description: Missing required query parameters
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/transactions/{id}:
+    get:
+      tags: [Transactions]
+      summary: Get a transaction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/Expand" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Transactions]
+      summary: Update transaction metadata
+      description: |
+        Metadata is the only mutable field on a transaction. Any other
+        field returns `409 immutable_field`. To correct posted data,
+        write a reversal.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                metadata: { type: object, additionalProperties: true }
+                merge:
+                  type: boolean
+                  default: true
+                  description: When true (default), merge with existing metadata. When false, replace.
+            examples:
+              add-tag:
+                value:
+                  metadata: { reviewed_by: tom, notes: "manual capture" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Immutable" }
+    delete:
+      tags: [Transactions]
+      summary: Not allowed, the ledger is append-only
+      description: |
+        Returns `405` with a hint pointing at `/reverse`. This is
+        intentional: corrections must be auditable transactions, not
+        silent deletes.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                default:
+                  value:
+                    error:
+                      code: invalid_request
+                      message: the ledger is append-only
+                      hint: "to undo a transaction, POST /v1/transactions/:id/reverse"
+                      docs_url: https://docs.kordio.io/errors#invalid_request
+
+  /v1/transactions/{id}/reverse:
+    post:
+      tags: [Transactions]
+      summary: Reverse a transaction
+      description: |
+        Creates a new transaction with each posting's direction flipped
+        and writes a bidirectional link via `reverses` / `reversed_by`.
+        Idempotent on `Idempotency-Key`.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/Expand" }
+      responses:
+        "201":
+          description: Reversal created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: already_reversed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                default:
+                  value:
+                    error:
+                      code: already_reversed
+                      message: transaction already has a reversal
+                      param: id
+                      hint: fetch the existing reversal via GET /v1/transactions/:id and inspect reversed_by
+                      docs_url: https://docs.kordio.io/errors#already_reversed
+
+  /v1/transactions/{id}/commit:
+    post:
+      tags: [Transactions]
+      summary: Commit pending postings
+      description: |
+        Finalizes any `pending: true` postings on a transaction.
+        Idempotent on `Idempotency-Key`: replays return the original
+        result without re-emitting events.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: Committed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/transactions/{id}/refund:
+    post:
+      tags: [Transactions]
+      summary: Refund a transaction (partial or full)
+      description: |
+        Books an inverse transaction for the requested amount,
+        scaling every leg of the original (including legs in other
+        currencies) by `amount / gross_in(currency)`. Banker's
+        rounding; residual on the largest leg per currency, so the
+        new transaction is balanced per currency.
+
+        `currency` is the base currency the caller is refunding. For
+        single-currency originals it may be omitted and is inferred.
+        For multi-currency originals it is **required**; omitting it
+        returns `refund_currency_required` (422).
+
+        Sum of prior refunds is tracked per currency: a 100% USDC
+        refund does not block a later 100% BTC refund on a USDC+BTC
+        original. Refunds that would exceed the original's remaining
+        amount in the requested currency return
+        `partial_refund_exceeds_original` (422). Idempotent on
+        `Idempotency-Key`.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/Expand" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  oneOf:
+                    - { type: string, pattern: '^\d+$' }
+                    - { type: integer, minimum: 1 }
+                  description: Refund amount in minor units. Accepts a positive decimal string (recommended) or an integer on write.
+                  example: "5000000"
+                currency:
+                  type: string
+                  description: |
+                    The base currency to refund. Optional for
+                    single-currency originals (inferred). Required
+                    for multi-currency originals; omitting returns
+                    `refund_currency_required` (422).
+                  example: USDC
+                idempotency_key:
+                  type: string
+                  description: Optional body alternative to the `Idempotency-Key` header. Header wins.
+                metadata:
+                  type: object
+                  additionalProperties: true
+            examples:
+              partial:
+                value:
+                  amount: "5000000"
+                  idempotency_key: refund_pi_acme_1234_partial_01
+                  metadata: { reason: "customer requested partial refund" }
+      responses:
+        "201":
+          description: Refund transaction created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "200":
+          description: Idempotency replay (original refund returned)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Invalid refund amount, or refund would exceed original
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                exceeds:
+                  value:
+                    error:
+                      code: partial_refund_exceeds_original
+                      message: refund amount exceeds the remaining refundable amount
+                      hint: fetch the original via GET /v1/transactions/:id to see the remaining refundable balance
+                      docs_url: https://docs.kordio.io/errors#partial_refund_exceeds_original
+                currency_required:
+                  value:
+                    error:
+                      code: refund_currency_required
+                      message: currency is required when the original has postings in multiple currencies
+                      hint: "pass `currency` matching one of: USDC, BTC"
+                      docs_url: https://docs.kordio.io/errors#refund_currency_required
+
+  # ===========================================================================
+  # Reserves
+  # ===========================================================================
+
+  /v1/reserves:
+    post:
+      tags: [Reserves]
+      summary: Sweep funds into a reserve account
+      description: |
+        Creates a reserve account (if it doesn't yet exist) for the
+        `(template, counterparty_ref, currency)` triple and books a
+        balanced transaction that debits the source account and credits
+        the reserve. Reserves model holdbacks, escrow, FX holds, and any
+        other case where unrestricted funds need to be earmarked for a
+        named counterparty.
+
+        Listing and balance reads use the standard `/v1/accounts`
+        surface (`?kind=reserve&counterparty_ref=<x>`). The platform
+        does NOT auto-release on `expires_at`; that's customer policy.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReserveSweepInput" }
+            examples:
+              acme:
+                value:
+                  source_account_id: payable:acme
+                  template: merchant_payable
+                  counterparty_ref: acme
+                  currency: USDC
+                  amount: "500000"
+                  idempotency_key: sweep_acme_2026_05_27
+      responses:
+        "201":
+          description: Reserve sweep booked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReserveOpResult" }
+        "422":
+          description: |
+            `reserve_insufficient_funds` (source would go negative),
+            `reserve_currency_mismatch` (source currency != reserve
+            currency), or `account_template_unknown`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                insufficient_funds:
+                  value:
+                    error:
+                      code: reserve_insufficient_funds
+                      message: the source account would exceed its overdraft policy
+                      docs_url: https://docs.kordio.io/errors#reserve_insufficient_funds
+                currency_mismatch:
+                  value:
+                    error:
+                      code: reserve_currency_mismatch
+                      message: currency does not match
+                      docs_url: https://docs.kordio.io/errors#reserve_currency_mismatch
+                template_unknown:
+                  value:
+                    error:
+                      code: account_template_unknown
+                      message: template not found in this ledger
+                      docs_url: https://docs.kordio.io/errors#account_template_unknown
+
+  /v1/reserves/{id}/release:
+    post:
+      tags: [Reserves]
+      summary: Release funds from a reserve to a target account
+      description: |
+        Books a balanced transaction debiting the reserve and crediting
+        `target_account_id`. The target need not be the original source.
+        Idempotent on `Idempotency-Key`.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, example: "reserve:merchant_payable:acme:usdc" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReserveReleaseInput" }
+      responses:
+        "201":
+          description: Release booked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReserveOpResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            `reserve_release_exceeds_balance` when amount exceeds the
+            reserve's posted balance, or `reserve_currency_mismatch`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              examples:
+                exceeds:
+                  value:
+                    error:
+                      code: reserve_release_exceeds_balance
+                      message: amount exceeds the reserve's posted balance
+                      docs_url: https://docs.kordio.io/errors#reserve_release_exceeds_balance
+
+  /v1/reserves/{id}/claw:
+    post:
+      tags: [Reserves]
+      summary: Claw funds from a reserve into an operator account
+      description: |
+        Books a balanced transaction debiting the reserve and crediting
+        `operator_account_id`. Used when the held-back funds are
+        forfeited to the operator (e.g. a chargeback lost by the
+        merchant, an expired escrow window). The `reason_code` is
+        persisted in transaction metadata for audit.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReserveClawInput" }
+      responses:
+        "201":
+          description: Claw booked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReserveOpResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            `reserve_release_exceeds_balance` when amount exceeds the
+            reserve's posted balance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  # ===========================================================================
+  # Events
+  # ===========================================================================
+
+  /v1/events:
+    get:
+      tags: [Events]
+      summary: List events
+      description: |
+        Same payloads webhooks deliver. Use for backfill, debugging, or
+        as a polling alternative to webhooks.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+        - name: type
+          in: query
+          schema: { type: string }
+          example: transaction.created
+        - name: resource_id
+          in: query
+          schema: { type: string }
+        - name: since
+          in: query
+          description: |
+            Restrict results to events inserted at or after this point.
+            Accepts an ISO 8601 timestamp (`2026-05-27T00:00:00Z`) or a
+            relative duration string with unit suffix `s`, `m`, `h`, or
+            `d` (e.g. `24h`, `7d`, `15m`). Unparseable values are
+            silently ignored.
+          schema: { type: string }
+          example: 24h
+      responses:
+        "200":
+          description: A page of events, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+
+  /v1/events/{id}:
+    get:
+      tags: [Events]
+      summary: Fetch one event
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ===========================================================================
+  # Reports
+  # ===========================================================================
+
+  /v1/reports/trial_balance:
+    get:
+      tags: [Reports]
+      summary: Trial balance as of a timestamp
+      description: |
+        Every account's balance, with per-currency debit/credit totals.
+        A healthy ledger has `totals_by_currency[X].residual == 0` for
+        every currency. The `healthy` boolean rolls this up.
+
+        Uses `value_date` for the cutoff. Pass `?at=` for a historical
+        view; omit for current.
+      parameters:
+        - name: at
+          in: query
+          schema: { type: string, format: date-time }
+          example: "2026-04-30T23:59:59Z"
+        - name: currency
+          in: query
+          schema: { type: string }
+          description: Filter to a single currency.
+        - name: include_zero
+          in: query
+          schema: { type: boolean, default: false }
+          description: Include accounts with zero posted + pending.
+      responses:
+        "200":
+          description: Trial balance report
+          content:
+            application/json:
+              examples:
+                healthy:
+                  value:
+                    object: trial_balance
+                    as_of: "2026-05-14T20:53:37.027279Z"
+                    mode: test
+                    healthy: true
+                    totals_by_currency:
+                      USDC: { debit: "41372114398", credit: "41372114398", residual: "0" }
+                    accounts:
+                      - { account: accounts_receivable:acme, name: "Acme payable", type: liability, currency: USDC, posted: "9700000", pending: "0", debit_total: "0", credit_total: "9700000" }
+                      - { account: revenue:subscriptions, name: "Fee revenue", type: revenue, currency: USDC, posted: "300000", pending: "0", debit_total: "0", credit_total: "300000" }
+
+  /v1/reports/balance_sheet:
+    get:
+      tags: [Reports]
+      summary: Balance sheet (assets / liabilities / equity)
+      description: |
+        Point-in-time balance sheet computed against `value_date`. Pass
+        `?at=` for a historical view; omit for current. `currency` may
+        be passed to scope the report to a single currency.
+      parameters:
+        - name: at
+          in: query
+          schema: { type: string, format: date-time }
+        - name: currency
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Balance sheet report
+          content:
+            application/json: {}
+
+  /v1/reports/income_statement:
+    get:
+      tags: [Reports]
+      summary: Income statement (revenue / expense over a period)
+      description: |
+        Revenue and expense totals over `[from, to)`. Both `from` and
+        `to` are ISO 8601 instants and use `value_date` for inclusion.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: currency
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Income statement report
+          content:
+            application/json: {}
+
+  /v1/reports/cash_flow:
+    get:
+      tags: [Reports]
+      summary: Cash flow over a period
+      description: |
+        Cash movement broken out by category over `[from, to)`. Uses
+        `value_date`.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: currency
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Cash flow report
+          content:
+            application/json: {}
+
+  /v1/reports/reserves_outstanding:
+    get:
+      tags: [Reports, Reserves]
+      summary: Total reserved per currency per counterparty
+      description: |
+        Sums the posted balance of every `account_kind = "reserve"`
+        account in the ledger, grouped by `(counterparty_ref, currency)`.
+        Empty when no reserves exist.
+      responses:
+        "200":
+          description: Reserves outstanding report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservesOutstandingReport" }
+
+  /v1/reports/fund_segregation:
+    get:
+      tags: [Reports]
+      summary: Funds segregation snapshot
+      description: |
+        Per-currency totals of `client_held` vs. `custody_held` accounts
+        plus a delta and a custody breakdown. Feeds regulator-style
+        client-money reports (EMI, CASP, etc.). The platform itself
+        does not interpret the classification beyond grouping.
+
+        Classifications and custody tags are set by the customer on
+        accounts or inherited from account templates. The default
+        classification is `neutral`, so existing ledgers report an
+        empty `by_currency` until accounts are tagged.
+
+        On-demand only at v1: no snapshot history is kept (see Q2 of
+        `docs/decisions/2026-05-27-platform-open-questions.md`).
+      parameters:
+        - name: value_date
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: |
+            Point-in-time cutoff (uses `value_date`, not `booking_date`).
+            Defaults to now.
+        - name: currency
+          in: query
+          required: false
+          schema: { type: string }
+          description: Restrict the report to a single currency.
+      responses:
+        "200":
+          description: Fund segregation snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FundSegregationReport" }
+
+  # ===========================================================================
+  # Reconciliation
+  # ===========================================================================
+
+  /v1/reconciliation_runs:
+    get:
+      tags: [Reconciliation]
+      summary: List historic reconciliation runs
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: List of runs (no embedded snapshot; fetch by id for that)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+    post:
+      tags: [Reconciliation]
+      summary: Run a reconciliation
+      description: |
+        Match a snapshot of external items against unreconciled
+        postings. Matching is per-currency, per-amount, with a default
+        24-hour `value_date` window. Optional `account_id` on each item
+        narrows the candidate pool.
+
+        The response surfaces three sets: `matched`, `unmatched_external`
+        (items we couldn't pair), and `unmatched_internal` (postings in
+        the time window that no external item claimed; only populated
+        when `from`/`to` bound the query).
+
+        Idempotent: matched postings get marked once. Items are stored
+        as external transactions keyed by `(source, external_id)`.
+        Re-running the same snapshot reports already-matched items in
+        `matched` with their original attribution; nothing is
+        double-marked.
+
+        Items may carry `reference_rail`, `reference_kind`, and
+        `reference_value` (all three or none). When the triple resolves
+        to a transaction external ref, that posting is matched first
+        with strategy `external_ref` (exact amount required).
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source, items]
+              properties:
+                source:
+                  type: string
+                  description: Name the external system you're reconciling against.
+                  example: cobo
+                external_reference:
+                  type: string
+                  description: Free-form pointer back to the snapshot in the external system.
+                  example: "cobo:2026-05-14:eth"
+                note: { type: string }
+                from: { type: string, format: date-time }
+                to: { type: string, format: date-time }
+                window_seconds:
+                  type: integer
+                  default: 86400
+                  description: Allowed |posting.value_date - item.at| in seconds.
+                strategy:
+                  type: string
+                  enum: [exact, sum_in_window]
+                  default: exact
+                  description: |
+                    Matching strategy. `exact` pairs an external row with at most one
+                    posting (default, pre-existing behavior). `sum_in_window` pairs an
+                    external row with a subset of up to five postings whose summed
+                    amount equals the external amount within
+                    `auto_resolve_below_minor_units`, with every posting in the subset
+                    inside `+/- window_seconds` of the external row's `at`.
+                auto_resolve_below_minor_units:
+                  oneOf:
+                    - { type: string, pattern: '^\d+$' }
+                    - { type: integer }
+                  default: "0"
+                  description: |
+                    Absolute minor-unit tolerance budget for auto-resolving small
+                    breaks. Accepts a decimal string (recommended) or an integer on
+                    write; returned as a string. A match whose |sum(postings) -
+                    external_amount| residual is <= this value is treated as matched
+                    and emits `reconciliation.break_auto_resolved`. Default "0" =
+                    strictly equal.
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [external_id, amount, currency, at]
+                    properties:
+                      external_id: { type: string, example: "dep_abc123" }
+                      amount:
+                        oneOf:
+                          - { type: string, pattern: '^-?\d+$' }
+                          - { type: integer }
+                        description: External amount in minor units. Accepts a decimal string (recommended) or an integer on write. Returned as a string.
+                        example: "10000000"
+                      currency: { type: string, example: USDC }
+                      at: { type: string, format: date-time }
+                      account_id:
+                        type: string
+                        description: Optional hint to narrow the candidate set.
+                        example: "cash:usd"
+                      reference_rail: { type: string, example: stripe }
+                      reference_kind: { type: string, example: charge }
+                      reference_value: { type: string, example: "ch_3Nq" }
+            examples:
+              cobo-daily:
+                summary: Daily Cobo deposit reconciliation
+                value:
+                  source: cobo
+                  external_reference: "cobo:2026-05-14:eth"
+                  from: "2026-05-14T00:00:00Z"
+                  to: "2026-05-15T00:00:00Z"
+                  items:
+                    - { external_id: dep_abc, amount: "10000000", currency: USDC, at: "2026-05-14T09:00:00Z", account_id: "cash:usd" }
+                    - { external_id: dep_def, amount: "5000000", currency: USDC, at: "2026-05-14T14:00:00Z", account_id: "cash:usd" }
+      responses:
+        "201":
+          description: Run executed
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    object: reconciliation_run
+                    id: "cf930621-69b3-4a77-960a-3b64bb8793e5"
+                    source: cobo
+                    source_id: "2e0ce42a-46cf-4c61-bf63-0e1a72f5d8a1"
+                    status: completed
+                    external_reference: "cobo:2026-05-14:eth"
+                    matched_count: 2
+                    unmatched_count: 0
+                    matched:
+                      - { external_id: dep_abc, posting_id: 1178, account: "cash:usd", amount: "10000000", currency: USDC, posting_value_date: "2026-05-14T09:00:00.000000Z", external_at: "2026-05-14T09:00:00.000000Z" }
+                    unmatched_external: []
+                    unmatched_internal: []
+                    created_at: "2026-05-14T21:00:00.000000Z"
+
+  /v1/reconciliation_runs/{id}:
+    get:
+      tags: [Reconciliation]
+      summary: Fetch a single run with its snapshot
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Full run
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/sources:
+    get:
+      tags: [Sources]
+      summary: List reconciliation sources
+      responses:
+        "200":
+          description: List of sources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+    post:
+      tags: [Sources]
+      summary: Create a source
+      description: |
+        A source names an external system you reconcile against
+        (a PSP, bank, exchange). Per-source defaults (`default_strategy`,
+        `default_window_seconds`, `default_tolerance_minor_units`,
+        `default_account_id`) apply to source-scoped runs.
+
+        Names are unique per ledger, lowercased. Creating a name that an
+        inline `POST /v1/reconciliation_runs` already used implicitly
+        promotes that source and applies the provided defaults.
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: stripe }
+                kind:
+                  type: string
+                  default: custom
+                  description: Connector kind. Selects the inbound payload adapter.
+                default_strategy:
+                  type: string
+                  enum: [exact, sum_in_window]
+                  default: exact
+                default_window_seconds: { type: integer, default: 86400 }
+                default_tolerance_minor_units:
+                  oneOf:
+                    - { type: string, pattern: '^\d+$' }
+                    - { type: integer }
+                  default: "0"
+                  description: Absolute minor-unit tolerance budget. Accepts a decimal string (recommended) or an integer on write. Returned as a string.
+                default_account_id: { type: string }
+                description: { type: string }
+                metadata: { type: object }
+      responses:
+        "201":
+          description: Source created
+        "409":
+          description: A source with this name already exists
+
+  /v1/sources/{id}:
+    get:
+      tags: [Sources]
+      summary: Fetch a source
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Source }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Sources]
+      summary: Update a source's defaults
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Updated source }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/sources/{source_id}/external_transactions:
+    post:
+      tags: [Sources]
+      summary: Ingest external transactions (idempotent batch)
+      description: |
+        Stores up to 1000 external money-movement rows. Idempotent on
+        `(source, external_id)`: re-submitting a row never mutates the
+        stored copy and reports `replayed`. Invalid rows report `error`
+        per item without blocking the rest.
+
+        Amounts are integer minor units. `occurred_at` (alias `at`) is
+        ISO 8601. `reference_rail`/`reference_kind`/`reference_value`
+        must be provided together; they join against transaction
+        external refs during matching. `raw` retains the provider
+        payload.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: source_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 1000
+                  items:
+                    type: object
+                    required: [external_id, amount, currency, occurred_at]
+                    properties:
+                      external_id: { type: string, example: "txn_1OqIJq" }
+                      amount:
+                        oneOf:
+                          - { type: string, pattern: '^-?\d+$' }
+                          - { type: integer }
+                        description: External amount in minor units. Accepts a decimal string (recommended) or an integer on write. Returned as a string.
+                        example: "10000000"
+                      currency: { type: string, example: USDC }
+                      occurred_at: { type: string, format: date-time }
+                      account_id: { type: string }
+                      reference_rail: { type: string, example: stripe }
+                      reference_kind: { type: string, example: charge }
+                      reference_value: { type: string, example: "ch_3Nq" }
+                      raw: { type: object }
+      responses:
+        "201":
+          description: Per-item ingest result
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    object: ingest_result
+                    source_id: "2e0ce42a-46cf-4c61-bf63-0e1a72f5d8a1"
+                    created_count: 1
+                    replayed_count: 1
+                    error_count: 0
+                    results:
+                      - { external_id: "txn_1", status: created }
+                      - { external_id: "txn_0", status: replayed }
+
+  /v1/sources/{source_id}/reconciliation_runs:
+    post:
+      tags: [Sources, Reconciliation]
+      summary: Run reconciliation for a source
+      description: |
+        Draws open external transactions for the source (optionally
+        bounded by `from`/`to` on `occurred_at`) and matches them.
+        Strategy, window, and tolerance default from the source.
+
+        Runs with at most 500 open items execute synchronously and
+        return the full result. Larger runs return `status: queued`
+        with empty arrays; poll `GET /v1/reconciliation_runs/{id}` and
+        subscribe to `reconciliation.run_completed`.
+
+        One queued or running run per source; a second request returns
+        `run_in_progress` (409). Inline `items` are rejected here.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: source_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from: { type: string, format: date-time }
+                to: { type: string, format: date-time }
+                strategy: { type: string, enum: [exact, sum_in_window] }
+                window_seconds: { type: integer }
+                auto_resolve_below_minor_units:
+                  oneOf:
+                    - { type: string, pattern: '^\d+$' }
+                    - { type: integer }
+                  description: Absolute minor-unit tolerance budget. Accepts a decimal string (recommended) or an integer on write.
+                external_reference: { type: string }
+                note: { type: string }
+      responses:
+        "201":
+          description: Run executed (completed) or queued
+        "409":
+          description: A run is already active for this source (`run_in_progress`)
+
+  /v1/sources/{id}/inbound:
+    post:
+      tags: [Sources]
+      summary: Enable or rotate the source's hosted inbound endpoint
+      description: |
+        Mints an inbound URL and signing secret. The plaintext secret is
+        returned once in this response and never again; calling again
+        rotates both token and secret, invalidating the old pair
+        immediately.
+
+        Push payloads to the returned `inbound_url` signed with
+
+            Kordio-Inbound-Signature: t=<unix_seconds>,v1=<hex>
+
+        where `v1 = HMAC-SHA256(secret, "<t>.<raw_body>")`. Timestamps
+        more than 5 minutes off are rejected. The payload is
+        `{"items": [...]}` (or one item object) with the same fields as
+        the batch ingest endpoint; ingestion is idempotent the same way.
+        The source's `kind` selects the payload adapter; `custom` uses
+        this generic scheme.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201":
+          description: Source with `inbound_url` and one-time `inbound_secret`
+    delete:
+      tags: [Sources]
+      summary: Disable the source's inbound endpoint
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Source with inbound disabled }
+
+  /v1/inbound/sources/{token}:
+    post:
+      tags: [Sources]
+      summary: Hosted inbound push endpoint
+      description: |
+        Unauthenticated except for the per-source HMAC signature (see
+        the enable endpoint). Unknown or disabled tokens 404. Never
+        runs matching; queue a run or rely on your scheduled runs.
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Per-batch counts
+          content:
+            application/json:
+              examples:
+                example:
+                  value: { object: inbound_result, received: 2, created: 2, replayed: 0, errors: 0 }
+        "401": { description: Missing or invalid signature }
+        "404": { description: Unknown or disabled inbound endpoint }
+
+  /v1/external_transactions:
+    get:
+      tags: [Sources]
+      summary: List external transactions
+      description: |
+        `status=open` is the break list. Filter by `source_id`,
+        `currency`, and `from`/`to` on `occurred_at`. Newest first.
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, matched, ignored] }
+        - name: source_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: currency
+          in: query
+          schema: { type: string }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: A page of external transactions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+
+  /v1/external_transactions/{id}:
+    get:
+      tags: [Sources]
+      summary: Fetch an external transaction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: External transaction }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/external_transactions/{id}/matches:
+    get:
+      tags: [Sources, Reconciliation]
+      summary: Match audit trail for an external transaction
+      description: Includes reversed matches (`reversed_at` set).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: List of reconciliation matches, newest first
+
+  /v1/external_transactions/{id}/ignore:
+    post:
+      tags: [Sources]
+      summary: Exclude an external transaction from matching
+      description: |
+        Marks an open row `ignored` (provider fees booked elsewhere,
+        test rows). Idempotent on already-ignored rows. Matched rows
+        are rejected with `invalid_state`; unmatch first. Emits
+        `external_transaction.ignored`.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200": { description: Ignored external transaction }
+        "409": { description: Row is matched (`invalid_state`) }
+
+  /v1/external_transactions/{id}/match:
+    post:
+      tags: [Sources, Reconciliation]
+      summary: Manually match an external transaction to postings
+      description: |
+        The postings must be unreconciled, share the row's currency,
+        and sum exactly to its amount; otherwise 422 with the residual
+        in the hint. Records a match with strategy `manual` and emits
+        `reconciliation.match_created`.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [posting_ids]
+              properties:
+                posting_ids:
+                  type: array
+                  items: { type: integer }
+                note: { type: string }
+      responses:
+        "201": { description: External transaction with the new match embedded }
+        "409": { description: Row is not open (`invalid_state`) }
+        "422": { description: Postings do not sum to the external amount }
+
+  /v1/external_transactions/{id}/unmatch:
+    post:
+      tags: [Sources, Reconciliation]
+      summary: Undo a match
+      description: |
+        Reopens the matched postings, stamps the match row `reversed_at`
+        (kept for audit), returns the row to `open`, and emits
+        `reconciliation.match_reversed`.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200": { description: Reopened external transaction }
+        "409": { description: Row is not matched (`invalid_state`) }
+
+  /v1/postings:
+    get:
+      tags: [Postings]
+      summary: List postings, tenant-wide
+      description: |
+        Cross-account list. Filter with `reconciled=true|false` to narrow
+        to settled or open postings; pass `account=<id>` to scope to one
+        account. For per-account history with the same tags filter, use
+        `GET /v1/accounts/:id/postings`.
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: reconciled
+          in: query
+          schema: { type: boolean }
+          description: Only reconciled (`true`) or only open (`false`). Omit for both.
+        - name: account
+          in: query
+          schema: { type: string }
+          description: Filter to one account by id.
+          example: accounts_receivable:acme
+        - name: before_value_date
+          in: query
+          schema: { type: string, format: date-time }
+          description: Only return postings with `value_date <` this timestamp.
+          example: "2026-05-10T00:00:00Z"
+      responses:
+        "200":
+          description: A page of postings, oldest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+
+  /v1/postings/{id}/reconciliations:
+    post:
+      tags: [Reconciliation, Postings]
+      summary: Manually mark a posting as reconciled
+      description: |
+        For ad-hoc cleanups when the automated matcher couldn't pair an
+        item. Already-reconciled postings are returned untouched.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                external_reference: { type: string }
+                reconciliation_run_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Updated posting
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ===========================================================================
+  # Periods
+  # ===========================================================================
+
+  /v1/period_closes:
+    get:
+      tags: [Periods]
+      summary: List period closes
+      parameters:
+        - name: include_reopened
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: List of closes, newest period first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+    post:
+      tags: [Periods]
+      summary: Close a period
+      description: |
+        Snapshots the trial balance at `period_end` and locks the
+        window. After close, any new transaction with `value_date`
+        inside the window is rejected with `period_closed`. Enforced
+        both in the coordinator and by a DB trigger.
+
+        Overlapping closes are rejected with `already_exists`.
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period_start, period_end, closed_by_label]
+              properties:
+                period_start: { type: string, format: date-time }
+                period_end: { type: string, format: date-time }
+                closed_by_label:
+                  type: string
+                  description: Person or system signing off on the close. Recorded forever.
+                  example: "controller@acme"
+                note: { type: string }
+            examples:
+              monthly:
+                value:
+                  period_start: "2026-03-01T00:00:00Z"
+                  period_end: "2026-03-31T23:59:59Z"
+                  closed_by_label: "controller@acme"
+                  note: "March 2026 monthly close"
+      responses:
+        "201":
+          description: Period closed; trial balance snapshotted
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    object: period_close
+                    id: "b9ed8576-dab5-4790-b86c-0e7af572659e"
+                    period_start: "2026-03-01T00:00:00.000000Z"
+                    period_end: "2026-03-31T23:59:59.000000Z"
+                    closed_by_label: "controller@acme"
+                    trial_balance:
+                      as_of: "2026-03-31T23:59:59Z"
+                      mode: live
+                      healthy: true
+                      totals_by_currency:
+                        USDC: { debit: "100000", credit: "100000", residual: "0" }
+                      accounts: []
+                    created_at: "2026-04-02T10:00:00Z"
+        "409":
+          description: Overlapping close already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /v1/period_closes/{id}:
+    get:
+      tags: [Periods]
+      summary: Fetch a close with full trial-balance snapshot
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Close (full snapshot embedded)
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/period_closes/{id}/reopen:
+    post:
+      tags: [Periods]
+      summary: Reopen a closed period
+      description: |
+        Records who reopened and when. Use sparingly; every reopen
+        invalidates a previously-signed period report. The original
+        close row is preserved with `reopened_at` + `reopened_by_label`
+        for audit.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reopened_by_label]
+              properties:
+                reopened_by_label: { type: string, example: "controller@acme" }
+      responses:
+        "200":
+          description: Reopened
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Already reopened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  # ===========================================================================
+  # Webhooks
+  # ===========================================================================
+
+  /v1/webhook_endpoints:
+    get:
+      tags: [Webhooks]
+      summary: List webhook endpoints
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+    post:
+      tags: [Webhooks]
+      summary: Register a webhook endpoint
+      description: |
+        The response includes `signing_secret`, the **only** time it is
+        returned. Store it before discarding the response.
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEndpointInput" }
+            examples:
+              all-events:
+                value:
+                  url: https://acme.example.com/webhooks/kordio
+                  enabled_events: [transaction.created, transaction.reversed]
+      responses:
+        "201":
+          description: Endpoint created. Body includes one-time `signing_secret`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookEndpoint" }
+              examples:
+                default:
+                  value:
+                    object: webhook_endpoint
+                    id: 446ea1a3-3bcc-4c8c-9f4f-9ef8e1468c4e
+                    url: https://acme.example.com/webhooks/kordio
+                    description: null
+                    mode: test
+                    active: true
+                    enabled_events: [transaction.created, transaction.reversed]
+                    last_delivered_at: null
+                    created_at: "2026-05-14T15:55:13.114492Z"
+                    signing_secret: whsec_test_4bSFH1YTkjwsgiMrHMwWJfJTIzsov60WxxsziZAE
+                    signing_secret_note: this is the only time the secret is shown. store it before discarding this response.
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/webhook_endpoints/{id}:
+    get:
+      tags: [Webhooks]
+      summary: Get a webhook endpoint
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookEndpoint" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Webhooks]
+      summary: Update endpoint settings
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string }
+                description: { type: string }
+                enabled_events: { type: array, items: { type: string } }
+                active: { type: boolean }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookEndpoint" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Webhooks]
+      summary: Remove an endpoint
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removed }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/webhook_endpoints/{id}/rotate_secret:
+    post:
+      tags: [Webhooks]
+      summary: Rotate the signing secret
+      description: |
+        Mints a new signing secret and returns the plaintext **once**. The
+        previous secret remains valid for inbound signature verification
+        for 24 hours after rotation, then is destroyed (sweeper job).
+        Outgoing deliveries sign with the current secret only; Kordio
+        does not dual-sign.
+
+        Re-rotating before the prior overlap window closes is rejected
+        with `rotation_in_progress` (409) to prevent a 3-key chain.
+        Body accepts no params today; `Idempotency-Key` header supported.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: Rotated. Body includes one-time `signing_secret`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/EnvelopeFields"
+                  - type: object
+                    required: [object, id, signing_secret, previous_secret_expires_at]
+                    properties:
+                      object: { type: string, enum: [webhook_endpoint] }
+                      id: { type: string, format: uuid }
+                      signing_secret:
+                        type: string
+                        description: New plaintext signing secret. Shown only on this response.
+                      previous_secret_expires_at:
+                        type: string
+                        format: date-time
+                        description: |
+                          UTC timestamp 24h in the future. The previous secret
+                          continues to verify inbound signatures until then.
+              examples:
+                default:
+                  value:
+                    object: webhook_endpoint
+                    id: 446ea1a3-3bcc-4c8c-9f4f-9ef8e1468c4e
+                    signing_secret: whsec_live_NxFp...VyAk
+                    previous_secret_expires_at: "2026-05-28T10:12:33.221Z"
+                    mode: live
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /v1/webhook_endpoints/{id}/deliveries:
+    get:
+      tags: [Webhooks]
+      summary: List recent deliveries for an endpoint
+      description: |
+        Returns the recent webhook deliveries for `:id`, newest-first, with
+        full request/response detail so an integrator can debug a failing
+        handler without DB access. `request_headers` is sanitized: any
+        header containing `authorization`, `secret`, or `cookie` is
+        redacted. The `Kordio-Signature` header is preserved (HMAC,
+        not the key) so the value can be verified.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, succeeded, failed] }
+          description: Filter by delivery status.
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/webhook_endpoints/{id}/deliveries/failed_count:
+    get:
+      tags: [Webhooks]
+      summary: Count failed deliveries for an endpoint
+      description: |
+        Returns the count of deliveries that exhausted their retries
+        (`status == failed`) for this endpoint. `since` accepts either
+        an ISO-8601 timestamp or a relative duration (`24h`, `7d`,
+        `1h`). Unparseable values are ignored.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: since
+          in: query
+          schema: { type: string }
+          example: "24h"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/EnvelopeFields"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [object, count]
+                        properties:
+                          object: { type: string, enum: [delivery_count] }
+                          count: { type: integer }
+                          since: { type: string, format: date-time, nullable: true }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/webhook_endpoints/{id}/test_send:
+    post:
+      tags: [Webhooks]
+      summary: Enqueue a synthetic test delivery
+      description: |
+        Creates a `webhook_delivery` row for `:id` carrying a synthetic
+        event. The synthetic event is NOT persisted to `/v1/events`;
+        test sends shouldn't pollute the durable event tail subscribers
+        consume. The DeliveryWorker delivers it like any other.
+
+        `event_type` defaults to `"webhook.test"`. `payload` defaults to
+        `{"ping": true, "test": true}`. Both are optional.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event_type: { type: string, example: "webhook.test" }
+                payload: { type: object }
+      responses:
+        "201":
+          description: Delivery enqueued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDelivery" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Endpoint is disabled (`webhook_endpoint_disabled`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /v1/webhook_deliveries/{id}:
+    get:
+      tags: [Webhooks]
+      summary: Fetch a webhook delivery
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDelivery" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/webhook_deliveries/{id}/redeliver:
+    post:
+      tags: [Webhooks]
+      summary: Re-enqueue a delivery
+      description: |
+        Inserts a NEW `webhook_delivery` row referencing the same event
+        + endpoint. The source row is not modified. The DeliveryWorker
+        picks up the new row on its next tick. Replaying the same
+        `Idempotency-Key` returns the original new row.
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "201":
+          description: New delivery enqueued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDelivery" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Endpoint is disabled (`webhook_endpoint_disabled`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  # ===========================================================================
+  # OAuth clients (programmatic key management)
+  # ===========================================================================
+
+  /v1/oauth_clients:
+    get:
+      tags: [Auth]
+      summary: List OAuth clients
+      description: |
+        Lists every client in the tenant. Secrets are **never** returned
+        on this endpoint, only on create + rotate. Requires
+        `ledger:clients:read`.
+      security:
+        - oauth2_read: [ledger:clients:read]
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+        - name: mode
+          in: query
+          schema: { type: string, enum: [live, test] }
+          description: Optional filter, only clients of the given mode.
+      responses:
+        "200":
+          description: A page of OAuth clients
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+    post:
+      tags: [Auth]
+      summary: Register an OAuth client
+      description: |
+        Mints a new client. The response includes `client_secret`, the
+        **only** time it is returned. Store it before discarding the
+        response. Requires `ledger:clients:write`.
+
+        `Idempotency-Key` header is accepted.
+      security:
+        - oauth2_write: [ledger:clients:write]
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OAuthClientInput" }
+            examples:
+              ci:
+                value:
+                  name: ci-keys
+                  mode: test
+                  scopes: [ledger:read, ledger:write]
+                  ledger_id: 446ea1a3-3bcc-4c8c-9f4f-9ef8e1468c4e
+      responses:
+        "201":
+          description: Client created. Body includes one-time `client_secret`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthClient" }
+              examples:
+                default:
+                  value:
+                    object: oauth_client
+                    id: client_3Jx9XfQwVZBfwUyZQ8H6
+                    name: ci-keys
+                    mode: test
+                    scopes: [ledger:read, ledger:write]
+                    ledger_id: 446ea1a3-3bcc-4c8c-9f4f-9ef8e1468c4e
+                    active: true
+                    last_used_at: null
+                    created_at: "2026-05-27T07:15:21.114Z"
+                    client_secret: sk_test_4bSFH1YTkjwsgiMrHMwWJfJTIzsov60WxxsziZAE
+                    client_secret_note: "this is the only time the client_secret is shown. store it before discarding this response."
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /v1/oauth_clients/{id}:
+    get:
+      tags: [Auth]
+      summary: Get an OAuth client
+      security:
+        - oauth2_read: [ledger:clients:read]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthClient" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Auth]
+      summary: Delete an OAuth client
+      description: |
+        Removes the client. In-flight access tokens minted by it remain
+        valid until their natural expiry (JWTs are stateless); no new
+        tokens can be issued.
+      security:
+        - oauth2_write: [ledger:clients:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Removed }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/oauth_clients/{id}/rotate_secret:
+    post:
+      tags: [Auth]
+      summary: Rotate the client secret
+      description: |
+        Mints a new client secret and returns the plaintext **once**. The
+        previous secret remains valid for `POST /oauth/token` for 24
+        hours after rotation, then is destroyed (sweeper job).
+
+        Re-rotating before the prior overlap window closes is rejected
+        with `rotation_in_progress` (409) to prevent a 3-key chain.
+        `Idempotency-Key` header is accepted.
+      security:
+        - oauth2_write: [ledger:clients:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: Rotated. Body includes one-time `client_secret`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthClient" }
+              examples:
+                default:
+                  value:
+                    object: oauth_client
+                    id: client_3Jx9XfQwVZBfwUyZQ8H6
+                    name: ci-keys
+                    mode: test
+                    scopes: [ledger:read, ledger:write]
+                    active: true
+                    created_at: "2026-05-27T07:15:21.114Z"
+                    client_secret: sk_test_NxFp...VyAk
+                    client_secret_note: "this is the only time the client_secret is shown. store it before discarding this response."
+                    previous_secret_expires_at: "2026-05-28T10:12:33.221Z"
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /v1/account_templates:
+    get:
+      tags: [Accounts]
+      summary: List account templates
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: A page of account templates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+    post:
+      tags: [Accounts]
+      summary: Define an account template
+      description: |
+        A template names a reusable shape for accounts: accounting type, allowed
+        currencies, balance sign rule. When `POST /v1/accounts` is called with
+        `template: <name>`, the request is validated against the template before
+        insert. Templates are immutable; create a new name to evolve.
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, accounting_type]
+              properties:
+                name: { type: string, example: accounts_receivable }
+                accounting_type:
+                  type: string
+                  enum: [asset, liability, revenue, expense, equity]
+                allowed_currencies:
+                  type: array
+                  items: { type: string }
+                  description: Empty list means any currency is allowed.
+                  example: [USD, EUR, USDC]
+                balance_non_negative:
+                  type: boolean
+                  default: false
+                  description: When true, accounts using this template default to overdraft_policy=none.
+                description: { type: string }
+                metadata: { type: object, additionalProperties: true }
+                fund_classification:
+                  type: string
+                  enum: [client_held, operator, neutral]
+                  description: Default classification inherited by accounts using this template.
+                custody_provider:
+                  type: string
+                  description: Optional custody identifier inherited by accounts.
+                custody_external_id:
+                  type: string
+                  description: Paired with `custody_provider`.
+            examples:
+              accounts-receivable:
+                value:
+                  name: accounts_receivable
+                  accounting_type: asset
+                  allowed_currencies: [USD, EUR, USDC]
+                  description: Amounts owed to the business.
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  object: { type: string, enum: [account_template] }
+                  name: { type: string }
+                  accounting_type: { type: string }
+                  allowed_currencies: { type: array, items: { type: string } }
+                  balance_non_negative: { type: boolean }
+                  description: { type: string, nullable: true }
+                  metadata: { type: object }
+                  created_at: { type: string, format: date-time }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/account_templates/{name}:
+    get:
+      tags: [Accounts]
+      summary: Get an account template
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string }, example: accounts_receivable }
+      responses:
+        "200":
+          description: ok
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/exports:
+    post:
+      tags: [Tenant]
+      summary: Queue an async export of the tenant's data
+      description: |
+        Queues a background job that streams the tenant's data
+        (accounts, transactions, postings, events, period_closes,
+        reconciliation_runs, webhook_endpoints, with secrets stripped) into
+        NDJSON files and returns signed `download_urls` valid for 7
+        days. Poll `GET /v1/exports/{id}` to wait for `status: "ready"`.
+
+        Idempotent on `Idempotency-Key`: replaying the same key returns
+        the original row (with header `idempotent-replayed: true`).
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resources:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - accounts
+                      - transactions
+                      - postings
+                      - events
+                      - period_closes
+                      - reconciliation_runs
+                      - webhook_endpoints
+                  description: Defaults to all known resources when omitted.
+                format:
+                  type: string
+                  enum: [ndjson]
+                  default: ndjson
+      responses:
+        "202":
+          description: Export queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Export" }
+        "200":
+          description: Idempotency-Key replay.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Export" }
+
+  /v1/exports/{id}:
+    get:
+      tags: [Tenant]
+      summary: Fetch an export
+      description: |
+        Returns the export row. Poll until `status` is `ready`, then
+        download from `download_urls` before `expires_at`.
+      security:
+        - oauth2_read: [ledger:read]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Export" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenants/me/anonymize:
+    post:
+      tags: [Tenant]
+      summary: Redact tenant metadata and party references
+      description: |
+        Right-of-erasure. Wipes `metadata` on every transaction,
+        posting, account, event, and webhook delivery payload owned by
+        the tenant, and replaces party-reference keys
+        (`counterparty_ref`, `sender_party_id`, `recipient_party_id`)
+        with the literal string `REDACTED`.
+
+        Postings, balances, value dates, currencies, and amounts remain.
+        That is the financial substance retention law requires us to
+        keep. See `docs/decisions/2026-05-27-platform-open-questions.md`
+        (Q6) for the full rationale.
+
+        Irreversible. All-or-nothing per tenant.
+
+        Auth: requires `ledger:write` AND a bearer token issued in the
+        last 5 minutes. A stale token returns `401
+        fresh_authentication_required`.
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnonymizationRequest"
+      responses:
+        "202":
+          description: Anonymization completed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/AnonymizationResult" }
+        "401":
+          description: |
+            Returned with `error.code: "fresh_authentication_required"`
+            when the bearer token was issued more than 5 minutes ago.
+        "422":
+          description: Returned when `confirm` is not the literal `"ANONYMIZE"`.
+
+  /v1/_meta/capabilities:
+    get:
+      tags: [System]
+      summary: Capabilities, guarantees, and limits of this deployment
+      description: |
+        Self-describing contract surface. Hit once at boot to discover
+        what's wired up, what the ledger promises, and what the hard
+        limits are, instead of hardcoding assumptions.
+
+        Three independent version fields:
+
+          * `ledger_capabilities_version`: calendar-versioned shape of
+            this document. Bumps when sections are added/renamed/removed.
+            Pin against this if you parse the body.
+          * `api_version`: the URL-prefix version (`v1`). Bumps on
+            breaking changes to resource paths or shapes.
+          * `release`: the running build. Useful for debugging; do not
+            gate behavior on it.
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - kind
+                  - ledger_capabilities_version
+                  - api_version
+                  - release
+                  - features
+                  - guarantees
+                  - limits
+                  - money_representation
+                  - consistency
+                  - time
+                  - reconciliation
+                  - pagination
+                  - auth
+                properties:
+                  object: { type: string, enum: [capabilities] }
+                  ledger_capabilities_version: { type: string, example: "2026-01" }
+                  api_version: { type: string, example: v1 }
+                  release: { type: string, example: "0.1.0" }
+                  tenant_status:
+                    type: string
+                    enum: [active, suspended, terminated]
+                    description: |
+                      Lifecycle state of the caller's tenant. `suspended`
+                      and `terminated` tenants can still read (so they can
+                      export); writes are rejected with `tenant_suspended`
+                      (403). Dashboards should surface a banner when this
+                      is not `active`.
+                  features:
+                    type: object
+                    additionalProperties: { type: boolean }
+                  guarantees:
+                    type: object
+                    description: |
+                      What the ledger promises about correctness. Each key
+                      is a property the deployment will not violate.
+                    properties:
+                      balanced_per_currency: { type: boolean }
+                      append_only: { type: boolean }
+                      replay_safe: { type: boolean }
+                      serializable_per_account: { type: boolean }
+                      double_entry_enforced_at:
+                        type: array
+                        items: { type: string, enum: [application, database_trigger] }
+                  limits:
+                    type: object
+                    additionalProperties: true
+                  money_representation:
+                    type: object
+                    properties:
+                      storage: { type: string, example: "numeric(38, 0)" }
+                      unit: { type: string, enum: [minor] }
+                      signed: { type: boolean }
+                      direction_field: { type: string, example: "debit | credit" }
+                      implicit_conversion: { type: boolean }
+                      rounding: { type: string, enum: [never] }
+                  consistency:
+                    type: object
+                    properties:
+                      within_transaction: { type: string, example: "all-or-nothing" }
+                      per_account_writes: { type: string, example: "serialized" }
+                      idempotency: { type: string, example: "exactly-once-effect" }
+                      read_after_write: { type: string, example: "monotonic" }
+                  time:
+                    type: object
+                    properties:
+                      clock: { type: string, enum: [utc] }
+                      value_date_precision: { type: string }
+                      booking_date_precision: { type: string }
+                      period_close_enforced_at:
+                        type: array
+                        items: { type: string }
+                  reconciliation:
+                    type: object
+                    properties:
+                      manual_marking: { type: boolean }
+                      default_matcher:
+                        type: object
+                        properties:
+                          fields:
+                            type: array
+                            items: { type: string }
+                          value_date_window_seconds: { type: integer }
+                      sources: { type: string }
+                  pagination:
+                    type: object
+                    properties:
+                      style: { type: string, enum: [cursor] }
+                      cursor: { type: string, enum: [opaque] }
+                      direction: { type: string, enum: [forward_only] }
+                      default_limit: { type: integer }
+                      max_limit: { type: integer }
+                  auth:
+                    type: object
+                    properties:
+                      scheme: { type: string }
+                      algorithm: { type: string }
+                      grant_types:
+                        type: array
+                        items: { type: string }
+                      scopes:
+                        type: array
+                        items: { type: string }
+                      discovery: { type: string }
+
+  # ===========================================================================
+  # Organizations & ledgers (org-scoped, no X-Ledger-Id required)
+  # ===========================================================================
+
+  /v1/ledgers:
+    get:
+      tags: [Ledgers]
+      summary: List ledgers in the caller's organization
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: A page of ledgers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/List" }
+    post:
+      tags: [Ledgers]
+      summary: Create a ledger
+      security:
+        - oauth2_write: [ledger:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, mode]
+              properties:
+                name: { type: string, example: "Acme production" }
+                mode: { type: string, enum: [live, test] }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "201":
+          description: Ledger created
+          content:
+            application/json:
+              schema: { type: object }
+
+  /v1/ledgers/{id}:
+    get:
+      tags: [Ledgers]
+      summary: Get a ledger
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: ok
+          content: { application/json: {} }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Ledgers]
+      summary: Update a ledger
+      security:
+        - oauth2_write: [ledger:write]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Updated
+          content: { application/json: {} }
+
+  /v1/organizations/me:
+    get:
+      tags: [Organizations]
+      summary: Return the caller's organization context
+      description: |
+        Resolves the calling client's organization and membership in
+        one round trip. Useful as a session bootstrap.
+      responses:
+        "200":
+          description: ok
+          content: { application/json: {} }
+
+# ===========================================================================
+# Recipes (illustrative only, not part of the platform vocabulary)
+# ===========================================================================
+#
+# The platform is neutral. Account IDs above use generic primitives
+# (`cash:usd`, `accounts_receivable:acme`, `revenue:subscriptions`,
+# `accounts_payable:vendor_x`). Below is one applied recipe for the
+# Payment-Gateway preset; treasury / marketplace / FX desks model
+# their own.
+x-recipes:
+  payment_gateway:
+    description: |
+      Crypto-payment-gateway accounts. Caller IDs are conventional, not
+      reserved. Replace with whatever your domain demands.
+    accounts:
+      - { id: "crypto_received:eth:usdc", type: asset, currency: USDC, name: "Inbound USDC on Ethereum" }
+      - { id: "merchant_payable:acme",    type: liability, currency: USDC, name: "Owed to Acme" }
+      - { id: "fee_revenue",              type: revenue, currency: USDC, name: "Gateway fees" }
+      - { id: "payout_disbursed:acme",    type: expense, currency: USDC, name: "Payouts sent" }
+    example_capture:
+      idempotency_key: "pi_acme_1234_capture"
+      postings:
+        - { account: "crypto_received:eth:usdc", direction: debit,  amount: "10000000", currency: USDC }
+        - { account: "merchant_payable:acme",    direction: credit, amount: "9700000", currency: USDC }
+        - { account: "fee_revenue",              direction: credit, amount: "300000", currency: USDC }
