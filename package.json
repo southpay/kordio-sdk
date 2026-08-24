@@ -6,10 +6,10 @@
   "homepage": "https://docs.kordio.io",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/trykordio/kordio-sdk.git"
+    "url": "git+https://github.com/southpay/kordio-sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/trykordio/kordio-sdk/issues"
+    "url": "https://github.com/southpay/kordio-sdk/issues"
   },
   "type": "module",
   "sideEffects": false,
