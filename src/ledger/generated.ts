@@ -744,7 +744,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["AccountStatement"];
                     };
                 };
                 404: components["responses"]["NotFound"];
@@ -2287,7 +2287,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["BalanceSheetReport"];
                     };
                 };
             };
@@ -2331,7 +2331,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["CashFlowReport"];
                     };
                 };
             };
@@ -2433,7 +2433,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["IncomeStatementReport"];
                     };
                 };
             };
@@ -2525,7 +2525,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["TrialBalanceReport"];
                     };
                 };
             };
@@ -4643,6 +4643,26 @@ export interface components {
              */
             type: "asset" | "liability" | "revenue" | "expense" | "equity";
         };
+        AccountStatement: {
+            /** @example cash:usd */
+            account: string;
+            closing_balance: components["schemas"]["StatementBalance"];
+            /** @example USDC */
+            currency: string;
+            entries: components["schemas"]["Posting"][];
+            entry_count: number;
+            /** @enum {string} */
+            object: "account_statement";
+            opening_balance: components["schemas"]["StatementBalance"];
+            period: {
+                /** Format: date-time */
+                from: string | null;
+                /** Format: date-time */
+                to: string;
+            };
+            /** @description True when the period held more entries than `limit` returned. */
+            truncated: boolean;
+        };
         AnonymizationRequest: {
             /**
              * @description Must equal the literal string `ANONYMIZE`.
@@ -4688,6 +4708,48 @@ export interface components {
              * @example 9700000
              */
             posted: string;
+        };
+        BalanceSheetReport: {
+            accounts: components["schemas"]["ReportAccountRow"][];
+            /** Format: date-time */
+            as_of: string;
+            by_currency: {
+                [key: string]: {
+                    assets: string;
+                    equity: string;
+                    liabilities: string;
+                    residual: string;
+                    retained_earnings: string;
+                    total_liabilities_and_equity: string;
+                };
+            };
+            healthy: boolean;
+            /** Format: uuid */
+            ledger_id: string;
+            /** @enum {string} */
+            object: "balance_sheet";
+        };
+        CashFlowReport: {
+            accounts: {
+                account: string;
+                currency: string;
+                name: string;
+                net_change: string;
+            }[];
+            by_currency: {
+                [key: string]: {
+                    financing: string;
+                    investing: string;
+                    net_change: string;
+                    operating: string;
+                    uncategorized: string;
+                };
+            };
+            /** Format: uuid */
+            ledger_id: string;
+            /** @enum {string} */
+            object: "cash_flow";
+            period: components["schemas"]["ReportPeriod"];
         };
         DryRun: components["schemas"]["EnvelopeFields"] & {
             /** @enum {string} */
@@ -4875,6 +4937,21 @@ export interface components {
             /** Format: date-time */
             value_date: string;
         };
+        IncomeStatementReport: {
+            accounts: components["schemas"]["ReportAccountRow"][];
+            by_currency: {
+                [key: string]: {
+                    expense: string;
+                    net_income: string;
+                    revenue: string;
+                };
+            };
+            /** Format: uuid */
+            ledger_id: string;
+            /** @enum {string} */
+            object: "income_statement";
+            period: components["schemas"]["ReportPeriod"];
+        };
         List: components["schemas"]["ListEnvelope"];
         ListEnvelope: {
             data: Record<string, unknown>[];
@@ -5022,6 +5099,23 @@ export interface components {
                 [key: string]: string;
             };
         };
+        ReportAccountRow: {
+            account: string;
+            credit_total?: string;
+            currency: string;
+            debit_total?: string;
+            name: string;
+            pending?: string;
+            posted: string;
+            /** @enum {string} */
+            type: "asset" | "liability" | "revenue" | "expense" | "equity";
+        };
+        ReportPeriod: {
+            /** Format: date-time */
+            from: string | null;
+            /** Format: date-time */
+            to: string;
+        };
         ReserveClawInput: {
             /** @description Amount in minor units to claw back, as a decimal string (recommended) or an integer on write. */
             amount: string | number;
@@ -5133,6 +5227,11 @@ export interface components {
              */
             template: string;
         };
+        StatementBalance: {
+            currency: string;
+            pending: string;
+            posted: string;
+        };
         Transaction: components["schemas"]["EnvelopeFields"] & {
             /** @description Returned only when `?expand=balances`. */
             balances?: components["schemas"]["Balance"][];
@@ -5226,6 +5325,24 @@ export interface components {
              * @example 2026-05-14T10:00:00Z
              */
             value_date?: string;
+        };
+        TrialBalanceReport: {
+            accounts: components["schemas"]["ReportAccountRow"][];
+            /** Format: date-time */
+            as_of: string;
+            /** @description True when every currency nets to a zero residual. */
+            healthy: boolean;
+            /** Format: uuid */
+            ledger_id: string;
+            /** @enum {string} */
+            object: "trial_balance";
+            totals_by_currency: {
+                [key: string]: {
+                    credit: string;
+                    debit: string;
+                    residual: string;
+                };
+            };
         };
         WebhookDelivery: components["schemas"]["EnvelopeFields"] & {
             /** @description How many HTTP attempts this row has made (0 for pending). */

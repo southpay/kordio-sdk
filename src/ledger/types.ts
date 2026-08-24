@@ -4,6 +4,13 @@ import type { components, paths } from './generated'
 type Schemas = components['schemas']
 
 export type Account = Schemas['Account']
+export type AccountStatement = Schemas['AccountStatement']
+export type StatementBalance = Schemas['StatementBalance']
+export type ReportAccountRow = Schemas['ReportAccountRow']
+export type TrialBalanceReport = Schemas['TrialBalanceReport']
+export type BalanceSheetReport = Schemas['BalanceSheetReport']
+export type IncomeStatementReport = Schemas['IncomeStatementReport']
+export type CashFlowReport = Schemas['CashFlowReport']
 export type AccountInput = Schemas['AccountInput']
 export type AccountType = NonNullable<Account['type']>
 export type Balance = Schemas['Balance']
@@ -103,103 +110,6 @@ export interface WirePosting {
   direction: Direction
   pending?: boolean
   tags?: Record<string, string>
-}
-
-export interface StatementBalance {
-  posted: string
-  pending: string
-  currency: string
-}
-
-export interface AccountStatement {
-  object: 'account_statement'
-  account: string
-  currency: string
-  period: { from: string | null; to: string }
-  opening_balance: StatementBalance
-  closing_balance: StatementBalance
-  entries: Posting[]
-  entry_count: number
-  truncated: boolean
-}
-
-export interface CurrencyPair {
-  debit: string
-  credit: string
-  residual: string
-}
-
-export interface ReportAccountRow {
-  account: string
-  name: string
-  type: AccountType
-  currency: string
-  posted: string
-  pending?: string
-  debit_total?: string
-  credit_total?: string
-}
-
-export interface TrialBalanceReport {
-  object: 'trial_balance'
-  ledger_id: string
-  as_of: string
-  healthy: boolean
-  accounts: ReportAccountRow[]
-  totals_by_currency: Record<string, CurrencyPair>
-}
-
-export interface BalanceSheetTotals {
-  assets: string
-  liabilities: string
-  equity: string
-  retained_earnings: string
-  total_liabilities_and_equity: string
-  residual: string
-}
-
-export interface BalanceSheetReport {
-  object: 'balance_sheet'
-  ledger_id: string
-  as_of: string
-  healthy: boolean
-  accounts: ReportAccountRow[]
-  by_currency: Record<string, BalanceSheetTotals>
-}
-
-export interface ReportPeriod {
-  from: string | null
-  to: string
-}
-
-export interface IncomeStatementTotals {
-  revenue: string
-  expense: string
-  net_income: string
-}
-
-export interface IncomeStatementReport {
-  object: 'income_statement'
-  ledger_id: string
-  period: ReportPeriod
-  accounts: ReportAccountRow[]
-  by_currency: Record<string, IncomeStatementTotals>
-}
-
-export interface CashFlowTotals {
-  operating: string
-  investing: string
-  financing: string
-  uncategorized: string
-  net_change: string
-}
-
-export interface CashFlowReport {
-  object: 'cash_flow'
-  ledger_id: string
-  period: ReportPeriod
-  accounts: { account: string; name: string; currency: string; net_change: string }[]
-  by_currency: Record<string, CashFlowTotals>
 }
 
 export interface Capabilities {
