@@ -24,12 +24,10 @@ export interface OAuthAuthProviderConfig extends OAuthCredentials {
   baseUrl: string
   fetch?: FetchLike
   tokenUrl?: string
-  expirySkewSeconds?: number
-  onToken?: (token: CachedToken) => void
 }
 
 const DEFAULT_TOKEN_PATH = '/oauth/token'
-const DEFAULT_SKEW_SECONDS = 60
+const SKEW_MS = 60_000
 
 export function defaultTokenUrl(baseUrl: string): string {
   try {
@@ -63,8 +61,7 @@ export class OAuthAuthProvider implements AuthProvider {
   }
 
   async token(options: { forceRefresh: boolean } = { forceRefresh: false }): Promise<CachedToken> {
-    const skewMs = (this.config.expirySkewSeconds ?? DEFAULT_SKEW_SECONDS) * 1000
-    if (!options.forceRefresh && this.cached && this.cached.expiresAtMs - skewMs > Date.now()) {
+    if (!options.forceRefresh && this.cached && this.cached.expiresAtMs - SKEW_MS > Date.now()) {
       return this.cached
     }
     if (options.forceRefresh) this.cached = null
@@ -73,7 +70,6 @@ export class OAuthAuthProvider implements AuthProvider {
     this.inflight = this.fetchToken()
       .then((token) => {
         this.cached = token
-        this.config.onToken?.(token)
         return token
       })
       .finally(() => {

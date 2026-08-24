@@ -136,9 +136,7 @@ export class TransactionsResource extends Resource {
     for (const field of ['rail', 'kind', 'value'] as const) {
       if (!params[field]) {
         throw new KordioPostingError(
-          'transactions.lookup needs all three of rail, kind and value, the external ' +
-            'reference tuple that identifies the event, such as ' +
-            `{ rail: 'ethereum', kind: 'tx_hash', value: '0xabc...' }. Missing: ${field}.`,
+          `transactions.lookup needs rail, kind and value. Missing: ${field}.`,
         )
       }
     }

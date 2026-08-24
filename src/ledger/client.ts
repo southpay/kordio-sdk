@@ -67,9 +67,8 @@ function resolveAuth(options: KordioLedgerOptions, baseUrl: string): AuthProvide
   if (accessToken) return new StaticTokenAuthProvider(accessToken)
 
   throw new TypeError(
-    'KordioLedger needs credentials. Pass { clientId, clientSecret } (recommended, the SDK ' +
-      'mints and refreshes tokens for you) or { accessToken }, or set KORDIO_CLIENT_ID and ' +
-      'KORDIO_CLIENT_SECRET (or KORDIO_TOKEN) in the environment.',
+    'KordioLedger needs credentials: pass { clientId, clientSecret } or { accessToken }, ' +
+      'or set KORDIO_CLIENT_ID and KORDIO_CLIENT_SECRET, or KORDIO_TOKEN.',
   )
 }
 

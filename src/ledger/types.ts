@@ -26,9 +26,10 @@ export type FundSegregationReport = Schemas['FundSegregationReport']
 export type LedgerErrorCode = NonNullable<Schemas['ErrorResponse']['error']['code']>
 
 export type LedgerMode = 'test' | 'live'
-export type OverdraftPolicy = 'allowed' | 'none'
-export type FundClassification = 'client_held' | 'operator' | 'neutral'
-export type AccountKind = 'standard' | 'reserve'
+export type OverdraftPolicy = NonNullable<AccountInput['overdraft_policy']>
+export type FundClassification = NonNullable<AccountInput['fund_classification']>
+export type AccountKind = NonNullable<Account['account_kind']>
+export type AccountKindFilter = 'standard' | 'reserve'
 
 export type ReconciliationStrategy = 'exact' | 'sum_in_window'
 export type ExternalTransactionStatus = 'open' | 'matched' | 'ignored'
@@ -59,20 +60,6 @@ export type KnownLedgerEventType =
   | 'webhook_endpoint.secret_rotated'
 
 export type LedgerEventType = KnownLedgerEventType | (string & {})
-
-export type Query<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends {
-  parameters: { query?: infer Q }
-}
-  ? Q
-  : never
-
-export type Body<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends {
-  requestBody: { content: { 'application/json': infer B } }
-}
-  ? B
-  : paths[P][M] extends { requestBody?: { content: { 'application/json': infer B } } }
-    ? B
-    : never
 
 export interface RequestConfig {
   signal?: AbortSignal

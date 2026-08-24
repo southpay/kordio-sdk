@@ -36,15 +36,6 @@ export function abs(value: bigint): bigint {
   return value < 0n ? -value : value
 }
 
-export function directionOf(signed: bigint): Direction {
-  return signed < 0n ? 'credit' : 'debit'
-}
-
-export function signedOf(amount: bigint, direction: Direction): bigint {
-  const magnitude = abs(amount)
-  return direction === 'credit' ? -magnitude : magnitude
-}
-
 export function formatMinorUnits(value: bigint, decimals: number): string {
   if (!Number.isInteger(decimals) || decimals < 0) {
     throw new KordioAmountError(`decimals must be a non-negative integer, received ${decimals}`)

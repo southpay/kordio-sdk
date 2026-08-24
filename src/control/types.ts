@@ -27,18 +27,17 @@ export type CosignatureValid = Schemas['CosignatureVerificationValid']
 export type CosignatureInvalid = Schemas['CosignatureVerificationInvalid']
 export type ControlErrorCode = NonNullable<Schemas['Error']['error']['code']>
 
-export type Outcome = 'allowed' | 'requires_approval' | 'denied'
-
-export type AgentMode = 'test' | 'live'
-export type AgentStatus = 'active' | 'suspended' | 'revoked'
-export type BudgetStatus = 'active' | 'exhausted' | 'closed'
-export type SpendTokenStatus = 'issued' | 'consumed' | 'expired' | 'void'
-export type ActionIntentState = 'pending' | 'requires_approval' | 'completed' | 'failed' | 'denied'
-export type PaymentIntentState = 'pending' | 'requires_approval' | 'executed' | 'failed' | 'denied'
+export type Outcome = NonNullable<Decision['outcome']>
+export type AgentMode = NonNullable<Agent['mode']>
+export type AgentStatus = NonNullable<Agent['status']>
+export type BudgetStatus = NonNullable<Budget['status']>
+export type SpendTokenStatus = NonNullable<SpendToken['status']>
+export type ActionIntentState = NonNullable<ActionIntent['state']>
+export type PaymentIntentState = NonNullable<PaymentIntent['state']>
 export type IntentState = ActionIntentState | PaymentIntentState
-export type PolicyMode = 'blocklist' | 'allowlist'
+export type PolicyMode = NonNullable<Policy['mode']>
+export type WebhookEndpointStatus = NonNullable<ControlWebhookEndpoint['status']>
 export type BillingPlan = 'sandbox' | 'build' | 'growth' | 'scale' | 'enterprise'
-export type WebhookEndpointStatus = 'active' | 'disabled'
 
 export interface CheckoutStarted {
   checkout_url: string

@@ -4,9 +4,11 @@ import { splitConfig, toRequestOptions } from '../request'
 import type {
   Account,
   AccountInput,
+  AccountKindFilter,
   AccountStatement,
   AccountType,
   Balance,
+  FundClassification,
   ListParams,
   Posting,
   RequestConfig,
@@ -15,9 +17,9 @@ import type {
 export interface AccountListParams extends ListParams {
   type?: AccountType
   currency?: string
-  kind?: 'standard' | 'reserve'
+  kind?: AccountKindFilter
   counterpartyRef?: string
-  fundClassification?: 'client_held' | 'operator' | 'neutral'
+  fundClassification?: FundClassification
   custodyProvider?: string
 }
 

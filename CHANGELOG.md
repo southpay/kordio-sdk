@@ -3,6 +3,16 @@
 All notable changes to this package are documented here. This project follows
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+Spec enums are now unions rather than `string`, so an invalid value fails to
+compile instead of failing at the API. Where the generated types already carry
+the enum the union is derived from them, so it cannot drift.
+
+Removed three options that had no consumer and no test: `onToken` and
+`expirySkewSeconds` on `OAuthAuthProvider`, and the unused `Query` and `Body`
+type helpers. Implement `AuthProvider` if you need to control token caching.
+
 ## 0.1.1
 
 No functional change. Republished so the tarball carries a provenance
