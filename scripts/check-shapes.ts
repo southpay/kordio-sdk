@@ -201,6 +201,13 @@ if (clientId && clientSecret) {
   }
 }
 
+if (checked === 0) {
+  console.error('No endpoint could be compared. Set credentials before trusting this:')
+  console.error('  ledger : KORDIO_CLIENT_ID, KORDIO_CLIENT_SECRET, KORDIO_LEDGER_ID')
+  console.error('  control: KORDIO_AGENT_KEY')
+  process.exit(1)
+}
+
 console.log(`Endpoints compared: ${checked}`)
 console.log(`No schema declared: ${skipped}`)
 console.log(`Findings:           ${issues.length}`)
