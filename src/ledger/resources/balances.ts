@@ -6,7 +6,7 @@ export class BalancesResource extends Resource {
   async get(accountId: string, config?: RequestConfig): Promise<Balance> {
     return await this.unwrap<Balance>(
       'GET',
-      `/api/v1/accounts/${encodePathSegment(accountId)}/balance`,
+      `/ledger/v1/accounts/${encodePathSegment(accountId)}/balance`,
       toRequestOptions(config),
     )
   }
@@ -14,7 +14,7 @@ export class BalancesResource extends Resource {
   async category(accountId: string, config?: RequestConfig): Promise<Balance> {
     return await this.unwrap<Balance>(
       'GET',
-      `/api/v1/accounts/${encodePathSegment(accountId)}/category_balance`,
+      `/ledger/v1/accounts/${encodePathSegment(accountId)}/category_balance`,
       toRequestOptions(config),
     )
   }

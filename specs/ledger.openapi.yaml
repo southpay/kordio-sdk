@@ -1389,7 +1389,7 @@ paths:
   # Accounts
   # ===========================================================================
 
-  /api/v1/accounts:
+  /ledger/v1/accounts:
     get:
       tags: [Accounts]
       summary: List accounts
@@ -1501,7 +1501,7 @@ paths:
                       details: { fields: { name: ["can't be blank"] } }
                       docs_url: https://docs.kordio.io/errors#invalid_request
 
-  /api/v1/accounts/{id}:
+  /ledger/v1/accounts/{id}:
     get:
       tags: [Accounts]
       summary: Get an account
@@ -1515,7 +1515,7 @@ paths:
               schema: { $ref: "#/components/schemas/Account" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/accounts/{id}/category_balance:
+  /ledger/v1/accounts/{id}/category_balance:
     get:
       tags: [Accounts, Reports]
       summary: Get the rolled-up balance for an account category
@@ -1534,7 +1534,7 @@ paths:
               schema: { $ref: "#/components/schemas/Balance" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/accounts/{id}/balance:
+  /ledger/v1/accounts/{id}/balance:
     get:
       tags: [Accounts, Reports]
       summary: Get an account's balance (current or point-in-time)
@@ -1567,7 +1567,7 @@ paths:
                     available: "9700000"
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/accounts/{id}/statement:
+  /ledger/v1/accounts/{id}/statement:
     get:
       tags: [Accounts, Reports]
       summary: Account statement for a period
@@ -1610,7 +1610,7 @@ paths:
                     truncated: false
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/accounts/{id}/postings:
+  /ledger/v1/accounts/{id}/postings:
     get:
       tags: [Accounts, Postings]
       summary: List postings on an account
@@ -1637,7 +1637,7 @@ paths:
   # Transactions
   # ===========================================================================
 
-  /api/v1/transactions:
+  /ledger/v1/transactions:
     get:
       tags: [Transactions]
       summary: List transactions
@@ -1754,7 +1754,7 @@ paths:
         "403": { $ref: "#/components/responses/InsufficientScope" }
         "422": { $ref: "#/components/responses/Unbalanced" }
 
-  /api/v1/transactions/bulk:
+  /ledger/v1/transactions/bulk:
     post:
       tags: [Transactions]
       summary: Create many transactions in one call
@@ -1833,7 +1833,7 @@ paths:
                           code: unbalanced
                           message: debits and credits must net to zero per currency
 
-  /api/v1/transactions/lookup:
+  /ledger/v1/transactions/lookup:
     get:
       tags: [Transactions]
       summary: Look up a transaction by external reference
@@ -1878,7 +1878,7 @@ paths:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/transactions/{id}:
+  /ledger/v1/transactions/{id}:
     get:
       tags: [Transactions]
       summary: Get a transaction
@@ -1952,7 +1952,7 @@ paths:
                       hint: "to undo a transaction, POST /v1/transactions/:id/reverse"
                       docs_url: https://docs.kordio.io/errors#invalid_request
 
-  /api/v1/transactions/{id}/reverse:
+  /ledger/v1/transactions/{id}/reverse:
     post:
       tags: [Transactions]
       summary: Reverse a transaction
@@ -1988,7 +1988,7 @@ paths:
                       hint: fetch the existing reversal via GET /v1/transactions/:id and inspect reversed_by
                       docs_url: https://docs.kordio.io/errors#already_reversed
 
-  /api/v1/transactions/{id}/commit:
+  /ledger/v1/transactions/{id}/commit:
     post:
       tags: [Transactions]
       summary: Commit pending postings
@@ -2009,7 +2009,7 @@ paths:
               schema: { $ref: "#/components/schemas/Transaction" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/transactions/{id}/refund:
+  /ledger/v1/transactions/{id}/refund:
     post:
       tags: [Transactions]
       summary: Refund a transaction (partial or full)
@@ -2108,7 +2108,7 @@ paths:
   # Reserves
   # ===========================================================================
 
-  /api/v1/reserves:
+  /ledger/v1/reserves:
     post:
       tags: [Reserves]
       summary: Sweep funds into a reserve account
@@ -2175,7 +2175,7 @@ paths:
                       message: template not found in this ledger
                       docs_url: https://docs.kordio.io/errors#account_template_unknown
 
-  /api/v1/reserves/{id}/release:
+  /ledger/v1/reserves/{id}/release:
     post:
       tags: [Reserves]
       summary: Release funds from a reserve to a target account
@@ -2215,7 +2215,7 @@ paths:
                       message: amount exceeds the reserve's posted balance
                       docs_url: https://docs.kordio.io/errors#reserve_release_exceeds_balance
 
-  /api/v1/reserves/{id}/claw:
+  /ledger/v1/reserves/{id}/claw:
     post:
       tags: [Reserves]
       summary: Claw funds from a reserve into an operator account
@@ -2254,7 +2254,7 @@ paths:
   # Events
   # ===========================================================================
 
-  /api/v1/events:
+  /ledger/v1/events:
     get:
       tags: [Events]
       summary: List events
@@ -2288,7 +2288,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/List" }
 
-  /api/v1/events/{id}:
+  /ledger/v1/events/{id}:
     get:
       tags: [Events]
       summary: Fetch one event
@@ -2306,7 +2306,7 @@ paths:
   # Reports
   # ===========================================================================
 
-  /api/v1/reports/trial_balance:
+  /ledger/v1/reports/trial_balance:
     get:
       tags: [Reports]
       summary: Trial balance as of a timestamp
@@ -2348,7 +2348,7 @@ paths:
                       - { account: accounts_receivable:acme, name: "Acme payable", type: liability, currency: USDC, posted: "9700000", pending: "0", debit_total: "0", credit_total: "9700000" }
                       - { account: revenue:subscriptions, name: "Fee revenue", type: revenue, currency: USDC, posted: "300000", pending: "0", debit_total: "0", credit_total: "300000" }
 
-  /api/v1/reports/balance_sheet:
+  /ledger/v1/reports/balance_sheet:
     get:
       tags: [Reports]
       summary: Balance sheet (assets / liabilities / equity)
@@ -2369,7 +2369,7 @@ paths:
           content:
             application/json: {}
 
-  /api/v1/reports/income_statement:
+  /ledger/v1/reports/income_statement:
     get:
       tags: [Reports]
       summary: Income statement (revenue / expense over a period)
@@ -2394,7 +2394,7 @@ paths:
           content:
             application/json: {}
 
-  /api/v1/reports/cash_flow:
+  /ledger/v1/reports/cash_flow:
     get:
       tags: [Reports]
       summary: Cash flow over a period
@@ -2419,7 +2419,7 @@ paths:
           content:
             application/json: {}
 
-  /api/v1/reports/reserves_outstanding:
+  /ledger/v1/reports/reserves_outstanding:
     get:
       tags: [Reports, Reserves]
       summary: Total reserved per currency per counterparty
@@ -2434,7 +2434,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ReservesOutstandingReport" }
 
-  /api/v1/reports/fund_segregation:
+  /ledger/v1/reports/fund_segregation:
     get:
       tags: [Reports]
       summary: Funds segregation snapshot
@@ -2475,7 +2475,7 @@ paths:
   # Reconciliation
   # ===========================================================================
 
-  /api/v1/reconciliation_runs:
+  /ledger/v1/reconciliation_runs:
     get:
       tags: [Reconciliation]
       summary: List historic reconciliation runs
@@ -2614,7 +2614,7 @@ paths:
                     unmatched_internal: []
                     created_at: "2026-05-14T21:00:00.000000Z"
 
-  /api/v1/reconciliation_runs/{id}:
+  /ledger/v1/reconciliation_runs/{id}:
     get:
       tags: [Reconciliation]
       summary: Fetch a single run with its snapshot
@@ -2625,7 +2625,7 @@ paths:
           description: Full run
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/sources:
+  /ledger/v1/sources:
     get:
       tags: [Sources]
       summary: List reconciliation sources
@@ -2682,7 +2682,7 @@ paths:
         "409":
           description: A source with this name already exists
 
-  /api/v1/sources/{id}:
+  /ledger/v1/sources/{id}:
     get:
       tags: [Sources]
       summary: Fetch a source
@@ -2702,7 +2702,7 @@ paths:
         "200": { description: Updated source }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/sources/{source_id}/external_transactions:
+  /ledger/v1/sources/{source_id}/external_transactions:
     post:
       tags: [Sources]
       summary: Ingest external transactions (idempotent batch)
@@ -2767,7 +2767,7 @@ paths:
                       - { external_id: "txn_1", status: created }
                       - { external_id: "txn_0", status: replayed }
 
-  /api/v1/sources/{source_id}/reconciliation_runs:
+  /ledger/v1/sources/{source_id}/reconciliation_runs:
     post:
       tags: [Sources, Reconciliation]
       summary: Run reconciliation for a source
@@ -2811,7 +2811,7 @@ paths:
         "409":
           description: A run is already active for this source (`run_in_progress`)
 
-  /api/v1/sources/{id}/inbound:
+  /ledger/v1/sources/{id}/inbound:
     post:
       tags: [Sources]
       summary: Enable or rotate the source's hosted inbound endpoint
@@ -2848,7 +2848,7 @@ paths:
       responses:
         "200": { description: Source with inbound disabled }
 
-  /api/v1/inbound/sources/{token}:
+  /ledger/v1/inbound/sources/{token}:
     post:
       tags: [Sources]
       summary: Hosted inbound push endpoint
@@ -2869,7 +2869,7 @@ paths:
         "401": { description: Missing or invalid signature }
         "404": { description: Unknown or disabled inbound endpoint }
 
-  /api/v1/external_transactions:
+  /ledger/v1/external_transactions:
     get:
       tags: [Sources]
       summary: List external transactions
@@ -2897,7 +2897,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/List" }
 
-  /api/v1/external_transactions/{id}:
+  /ledger/v1/external_transactions/{id}:
     get:
       tags: [Sources]
       summary: Fetch an external transaction
@@ -2907,7 +2907,7 @@ paths:
         "200": { description: External transaction }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/external_transactions/{id}/matches:
+  /ledger/v1/external_transactions/{id}/matches:
     get:
       tags: [Sources, Reconciliation]
       summary: Match audit trail for an external transaction
@@ -2918,7 +2918,7 @@ paths:
         "200":
           description: List of reconciliation matches, newest first
 
-  /api/v1/external_transactions/{id}/ignore:
+  /ledger/v1/external_transactions/{id}/ignore:
     post:
       tags: [Sources]
       summary: Exclude an external transaction from matching
@@ -2943,7 +2943,7 @@ paths:
         "200": { description: Ignored external transaction }
         "409": { description: Row is matched (`invalid_state`) }
 
-  /api/v1/external_transactions/{id}/match:
+  /ledger/v1/external_transactions/{id}/match:
     post:
       tags: [Sources, Reconciliation]
       summary: Manually match an external transaction to postings
@@ -2973,7 +2973,7 @@ paths:
         "409": { description: Row is not open (`invalid_state`) }
         "422": { description: Postings do not sum to the external amount }
 
-  /api/v1/external_transactions/{id}/unmatch:
+  /ledger/v1/external_transactions/{id}/unmatch:
     post:
       tags: [Sources, Reconciliation]
       summary: Undo a match
@@ -2997,7 +2997,7 @@ paths:
         "200": { description: Reopened external transaction }
         "409": { description: Row is not matched (`invalid_state`) }
 
-  /api/v1/postings:
+  /ledger/v1/postings:
     get:
       tags: [Postings]
       summary: List postings, tenant-wide
@@ -3030,7 +3030,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/List" }
 
-  /api/v1/postings/{id}/reconciliations:
+  /ledger/v1/postings/{id}/reconciliations:
     post:
       tags: [Reconciliation, Postings]
       summary: Manually mark a posting as reconciled
@@ -3059,7 +3059,7 @@ paths:
   # Periods
   # ===========================================================================
 
-  /api/v1/period_closes:
+  /ledger/v1/period_closes:
     get:
       tags: [Periods]
       summary: List period closes
@@ -3134,7 +3134,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
 
-  /api/v1/period_closes/{id}:
+  /ledger/v1/period_closes/{id}:
     get:
       tags: [Periods]
       summary: Fetch a close with full trial-balance snapshot
@@ -3145,7 +3145,7 @@ paths:
           description: Close (full snapshot embedded)
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/period_closes/{id}/reopen:
+  /ledger/v1/period_closes/{id}/reopen:
     post:
       tags: [Periods]
       summary: Reopen a closed period
@@ -3181,7 +3181,7 @@ paths:
   # Webhooks
   # ===========================================================================
 
-  /api/v1/webhook_endpoints:
+  /ledger/v1/webhook_endpoints:
     get:
       tags: [Webhooks]
       summary: List webhook endpoints
@@ -3231,7 +3231,7 @@ paths:
                     signing_secret_note: this is the only time the secret is shown. store it before discarding this response.
         "422": { $ref: "#/components/responses/Error" }
 
-  /api/v1/webhook_endpoints/{id}:
+  /ledger/v1/webhook_endpoints/{id}:
     get:
       tags: [Webhooks]
       summary: Get a webhook endpoint
@@ -3280,7 +3280,7 @@ paths:
         "204": { description: Removed }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/webhook_endpoints/{id}/rotate_secret:
+  /ledger/v1/webhook_endpoints/{id}/rotate_secret:
     post:
       tags: [Webhooks]
       summary: Rotate the signing secret
@@ -3332,7 +3332,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Error" }
 
-  /api/v1/webhook_endpoints/{id}/deliveries:
+  /ledger/v1/webhook_endpoints/{id}/deliveries:
     get:
       tags: [Webhooks]
       summary: List recent deliveries for an endpoint
@@ -3359,7 +3359,7 @@ paths:
               schema: { $ref: "#/components/schemas/List" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/webhook_endpoints/{id}/deliveries/failed_count:
+  /ledger/v1/webhook_endpoints/{id}/deliveries/failed_count:
     get:
       tags: [Webhooks]
       summary: Count failed deliveries for an endpoint
@@ -3393,7 +3393,7 @@ paths:
                           since: { type: string, format: date-time, nullable: true }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/webhook_endpoints/{id}/test_send:
+  /ledger/v1/webhook_endpoints/{id}/test_send:
     post:
       tags: [Webhooks]
       summary: Enqueue a synthetic test delivery
@@ -3432,7 +3432,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
 
-  /api/v1/webhook_deliveries/{id}:
+  /ledger/v1/webhook_deliveries/{id}:
     get:
       tags: [Webhooks]
       summary: Fetch a webhook delivery
@@ -3446,7 +3446,7 @@ paths:
               schema: { $ref: "#/components/schemas/WebhookDelivery" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/webhook_deliveries/{id}/redeliver:
+  /ledger/v1/webhook_deliveries/{id}/redeliver:
     post:
       tags: [Webhooks]
       summary: Re-enqueue a delivery
@@ -3477,7 +3477,7 @@ paths:
   # OAuth clients (programmatic key management)
   # ===========================================================================
 
-  /api/v1/oauth_clients:
+  /ledger/v1/oauth_clients:
     get:
       tags: [Auth]
       summary: List OAuth clients
@@ -3549,7 +3549,7 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Error" }
 
-  /api/v1/oauth_clients/{id}:
+  /ledger/v1/oauth_clients/{id}:
     get:
       tags: [Auth]
       summary: Get an OAuth client
@@ -3579,7 +3579,7 @@ paths:
         "204": { description: Removed }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/oauth_clients/{id}/rotate_secret:
+  /ledger/v1/oauth_clients/{id}/rotate_secret:
     post:
       tags: [Auth]
       summary: Rotate the client secret
@@ -3618,7 +3618,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Error" }
 
-  /api/v1/account_templates:
+  /ledger/v1/account_templates:
     get:
       tags: [Accounts]
       summary: List account templates
@@ -3700,7 +3700,7 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
-  /api/v1/account_templates/{name}:
+  /ledger/v1/account_templates/{name}:
     get:
       tags: [Accounts]
       summary: Get an account template
@@ -3711,7 +3711,7 @@ paths:
           description: ok
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/exports:
+  /ledger/v1/exports:
     post:
       tags: [Tenant]
       summary: Queue an async export of the tenant's data
@@ -3770,7 +3770,7 @@ paths:
                 properties:
                   data: { $ref: "#/components/schemas/Export" }
 
-  /api/v1/exports/{id}:
+  /ledger/v1/exports/{id}:
     get:
       tags: [Tenant]
       summary: Fetch an export
@@ -3792,7 +3792,7 @@ paths:
                   data: { $ref: "#/components/schemas/Export" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/tenants/me/anonymize:
+  /ledger/v1/tenants/me/anonymize:
     post:
       tags: [Tenant]
       summary: Redact tenant metadata and party references
@@ -3837,7 +3837,7 @@ paths:
         "422":
           description: Returned when `confirm` is not the literal `"ANONYMIZE"`.
 
-  /api/v1/_meta/capabilities:
+  /ledger/v1/_meta/capabilities:
     get:
       tags: [System]
       summary: Capabilities, guarantees, and limits of this deployment
@@ -3971,7 +3971,7 @@ paths:
   # Organizations & ledgers (org-scoped, no X-Ledger-Id required)
   # ===========================================================================
 
-  /api/v1/ledgers:
+  /ledger/v1/ledgers:
     get:
       tags: [Ledgers]
       summary: List ledgers in the caller's organization
@@ -4007,7 +4007,7 @@ paths:
             application/json:
               schema: { type: object }
 
-  /api/v1/ledgers/{id}:
+  /ledger/v1/ledgers/{id}:
     get:
       tags: [Ledgers]
       summary: Get a ledger
@@ -4039,7 +4039,7 @@ paths:
           description: Updated
           content: { application/json: {} }
 
-  /api/v1/organizations/me:
+  /ledger/v1/organizations/me:
     get:
       tags: [Organizations]
       summary: Return the caller's organization context

@@ -149,7 +149,7 @@ export class KordioLedger {
   async capabilities(): Promise<Capabilities> {
     const response = await this.transport.request<{ data?: Capabilities }>(
       'GET',
-      '/api/v1/_meta/capabilities',
+      '/ledger/v1/_meta/capabilities',
     )
     const body = response.data
     return (body && typeof body === 'object' && 'data' in body ? body.data : body) as Capabilities

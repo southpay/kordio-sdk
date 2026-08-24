@@ -35,13 +35,17 @@ export class ActionsResource extends Resource {
       metadata: params.metadata,
       trace_id: params.traceId,
     })
-    const response = await this.raw<DecisionEnvelope<ActionIntent>>('POST', '/v1/agent/actions', {
-      ...toRequestOptions(params, { body, idempotencyKey: key }),
-      expectedStatuses: DECISION_EXPECTED_STATUSES,
-    })
+    const response = await this.raw<DecisionEnvelope<ActionIntent>>(
+      'POST',
+      '/control/v1/agent/actions',
+      {
+        ...toRequestOptions(params, { body, idempotencyKey: key }),
+        expectedStatuses: DECISION_EXPECTED_STATUSES,
+      },
+    )
     return toDecisionResult<ActionIntent>(response, {
       method: 'POST',
-      path: '/v1/agent/actions',
+      path: '/control/v1/agent/actions',
     })
   }
 
@@ -56,7 +60,7 @@ export class ActionsResource extends Resource {
     })
     const response = await this.raw<DecisionEnvelope<ActionIntent>>(
       'POST',
-      '/v1/agent/actions/simulate',
+      '/control/v1/agent/actions/simulate',
       {
         ...toRequestOptions(params, { body }),
         expectedStatuses: DECISION_EXPECTED_STATUSES,
@@ -64,14 +68,14 @@ export class ActionsResource extends Resource {
     )
     return toDecisionResult<ActionIntent>(response, {
       method: 'POST',
-      path: '/v1/agent/actions/simulate',
+      path: '/control/v1/agent/actions/simulate',
     })
   }
 
   async get(id: string, config?: RequestConfig): Promise<ActionIntent> {
     return await this.unwrap<ActionIntent>(
       'GET',
-      `/v1/agent/actions/${encodePathSegment(id)}`,
+      `/control/v1/agent/actions/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -79,7 +83,7 @@ export class ActionsResource extends Resource {
   async complete(id: string, config?: RequestConfig): Promise<ActionIntent> {
     return await this.unwrap<ActionIntent>(
       'POST',
-      `/v1/agent/actions/${encodePathSegment(id)}/complete`,
+      `/control/v1/agent/actions/${encodePathSegment(id)}/complete`,
       toRequestOptions(config),
     )
   }
@@ -87,7 +91,7 @@ export class ActionsResource extends Resource {
   async fail(id: string, params: RequestConfig & { reason?: string } = {}): Promise<ActionIntent> {
     return await this.unwrap<ActionIntent>(
       'POST',
-      `/v1/agent/actions/${encodePathSegment(id)}/fail`,
+      `/control/v1/agent/actions/${encodePathSegment(id)}/fail`,
       toRequestOptions(params, { body: compact({ reason: params.reason }) }),
     )
   }
@@ -102,7 +106,7 @@ export class AgentBudgetsResource extends Resource {
     })
     return await this.unwrap<Budget>(
       'POST',
-      '/v1/agent/budgets',
+      '/control/v1/agent/budgets',
       toRequestOptions(params, { body }),
     )
   }
@@ -110,7 +114,7 @@ export class AgentBudgetsResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<Budget> {
     return await this.unwrap<Budget>(
       'GET',
-      `/v1/agent/budgets/${encodePathSegment(id)}`,
+      `/control/v1/agent/budgets/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -126,7 +130,7 @@ export class AgentSpendTokensResource extends Resource {
     })
     return await this.unwrap<SpendToken>(
       'POST',
-      '/v1/agent/spend_tokens',
+      '/control/v1/agent/spend_tokens',
       toRequestOptions(params, { body }),
     )
   }
@@ -147,7 +151,7 @@ export class AgentPaymentIntentsResource extends Resource {
     })
     const response = await this.raw<DecisionEnvelope<PaymentIntent>>(
       'POST',
-      '/v1/agent/payment_intents',
+      '/control/v1/agent/payment_intents',
       {
         ...toRequestOptions(params, { body }),
         expectedStatuses: DECISION_EXPECTED_STATUSES,
@@ -155,7 +159,7 @@ export class AgentPaymentIntentsResource extends Resource {
     )
     return toDecisionResult<PaymentIntent>(response, {
       method: 'POST',
-      path: '/v1/agent/payment_intents',
+      path: '/control/v1/agent/payment_intents',
     })
   }
 
@@ -170,7 +174,7 @@ export class AgentPaymentIntentsResource extends Resource {
     })
     const response = await this.raw<DecisionEnvelope<PaymentIntent>>(
       'POST',
-      '/v1/agent/payment_intents/simulate',
+      '/control/v1/agent/payment_intents/simulate',
       {
         ...toRequestOptions(params, { body }),
         expectedStatuses: DECISION_EXPECTED_STATUSES,
@@ -178,14 +182,14 @@ export class AgentPaymentIntentsResource extends Resource {
     )
     return toDecisionResult<PaymentIntent>(response, {
       method: 'POST',
-      path: '/v1/agent/payment_intents/simulate',
+      path: '/control/v1/agent/payment_intents/simulate',
     })
   }
 
   async get(id: string, config?: RequestConfig): Promise<PaymentIntent> {
     return await this.unwrap<PaymentIntent>(
       'GET',
-      `/v1/agent/payment_intents/${encodePathSegment(id)}`,
+      `/control/v1/agent/payment_intents/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -193,7 +197,7 @@ export class AgentPaymentIntentsResource extends Resource {
   async complete(id: string, config?: RequestConfig): Promise<PaymentIntent> {
     return await this.unwrap<PaymentIntent>(
       'POST',
-      `/v1/agent/payment_intents/${encodePathSegment(id)}/complete`,
+      `/control/v1/agent/payment_intents/${encodePathSegment(id)}/complete`,
       toRequestOptions(config),
     )
   }
@@ -201,7 +205,7 @@ export class AgentPaymentIntentsResource extends Resource {
   async fail(id: string, params: RequestConfig & { reason?: string } = {}): Promise<PaymentIntent> {
     return await this.unwrap<PaymentIntent>(
       'POST',
-      `/v1/agent/payment_intents/${encodePathSegment(id)}/fail`,
+      `/control/v1/agent/payment_intents/${encodePathSegment(id)}/fail`,
       toRequestOptions(params, { body: compact({ reason: params.reason }) }),
     )
   }

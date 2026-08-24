@@ -35,7 +35,7 @@ export class ReportsResource extends Resource {
     }
     return await this.unwrap<TrialBalanceReport>(
       'GET',
-      '/api/v1/reports/trial_balance',
+      '/ledger/v1/reports/trial_balance',
       toRequestOptions(params, { query }),
     )
   }
@@ -44,7 +44,7 @@ export class ReportsResource extends Resource {
     const query = compact({ at: isoDate(params.at), currency: params.currency })
     return await this.unwrap<BalanceSheetReport>(
       'GET',
-      '/api/v1/reports/balance_sheet',
+      '/ledger/v1/reports/balance_sheet',
       toRequestOptions(params, { query }),
     )
   }
@@ -57,7 +57,7 @@ export class ReportsResource extends Resource {
     })
     return await this.unwrap<IncomeStatementReport>(
       'GET',
-      '/api/v1/reports/income_statement',
+      '/ledger/v1/reports/income_statement',
       toRequestOptions(params, { query }),
     )
   }
@@ -70,7 +70,7 @@ export class ReportsResource extends Resource {
     })
     return await this.unwrap<CashFlowReport>(
       'GET',
-      '/api/v1/reports/cash_flow',
+      '/ledger/v1/reports/cash_flow',
       toRequestOptions(params, { query }),
     )
   }
@@ -79,7 +79,7 @@ export class ReportsResource extends Resource {
     const query = compact({ at: isoDate(params.at), currency: params.currency })
     return await this.unwrap<ReservesOutstandingReport>(
       'GET',
-      '/api/v1/reports/reserves_outstanding',
+      '/ledger/v1/reports/reserves_outstanding',
       toRequestOptions(params, { query }),
     )
   }
@@ -88,7 +88,7 @@ export class ReportsResource extends Resource {
     const query = compact({ at: isoDate(params.at), currency: params.currency })
     return await this.unwrap<FundSegregationReport>(
       'GET',
-      '/api/v1/reports/fund_segregation',
+      '/ledger/v1/reports/fund_segregation',
       toRequestOptions(params, { query }),
     )
   }

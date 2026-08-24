@@ -10,26 +10,28 @@ const INTENTIONALLY_UNWRAPPED: Record<string, string> = {
   'GET /healthz': 'exposed as KordioLedger#health',
   'GET /.well-known/oauth-authorization-server': 'discovery document, not a client call',
   'GET /.well-known/jwks.json': 'key material, fetched by verifiers not by this SDK',
-  'GET /api/v1/_meta/capabilities': 'exposed as KordioLedger#capabilities',
-  'POST /api/v1/inbound/sources/{token}': 'inbound receiver endpoint, called by third parties',
-  'POST /api/v1/tenants/me/anonymize': 'destructive tenant operation, use client.request()',
-  'DELETE /api/v1/transactions/{id}':
+  'GET /ledger/v1/_meta/capabilities': 'exposed as KordioLedger#capabilities',
+  'POST /ledger/v1/inbound/sources/{token}': 'inbound receiver endpoint, called by third parties',
+  'POST /ledger/v1/tenants/me/anonymize': 'destructive tenant operation, use client.request()',
+  'DELETE /ledger/v1/transactions/{id}':
     'documented 405, the ledger is append-only; use transactions.reverse',
 }
 
 const COVERED_BY: Record<string, string> = {
-  'POST /v1/cosign/verify': 'CosignResource#verify',
-  'POST /v1/cosign/consume': 'CosignResource#consume',
-  'GET /v1/workspaces/{workspace_slug}/action_intents': 'ApprovalQueue#list',
-  'GET /v1/workspaces/{workspace_slug}/action_intents/{id}': 'ApprovalQueue#get',
-  'GET /v1/workspaces/{workspace_slug}/action_intents/{id}/impact': 'ApprovalQueue#impact',
-  'POST /v1/workspaces/{workspace_slug}/action_intents/{id}/approve': 'ApprovalQueue#approve',
-  'POST /v1/workspaces/{workspace_slug}/action_intents/{id}/deny': 'ApprovalQueue#deny',
-  'GET /v1/workspaces/{workspace_slug}/payment_intents': 'ApprovalQueue#list',
-  'GET /v1/workspaces/{workspace_slug}/payment_intents/{id}': 'ApprovalQueue#get',
-  'GET /v1/workspaces/{workspace_slug}/payment_intents/{id}/impact': 'ApprovalQueue#impact',
-  'POST /v1/workspaces/{workspace_slug}/payment_intents/{id}/approve': 'ApprovalQueue#approve',
-  'POST /v1/workspaces/{workspace_slug}/payment_intents/{id}/deny': 'ApprovalQueue#deny',
+  'POST /control/v1/cosign/verify': 'CosignResource#verify',
+  'POST /control/v1/cosign/consume': 'CosignResource#consume',
+  'GET /control/v1/workspaces/{workspace_slug}/action_intents': 'ApprovalQueue#list',
+  'GET /control/v1/workspaces/{workspace_slug}/action_intents/{id}': 'ApprovalQueue#get',
+  'GET /control/v1/workspaces/{workspace_slug}/action_intents/{id}/impact': 'ApprovalQueue#impact',
+  'POST /control/v1/workspaces/{workspace_slug}/action_intents/{id}/approve':
+    'ApprovalQueue#approve',
+  'POST /control/v1/workspaces/{workspace_slug}/action_intents/{id}/deny': 'ApprovalQueue#deny',
+  'GET /control/v1/workspaces/{workspace_slug}/payment_intents': 'ApprovalQueue#list',
+  'GET /control/v1/workspaces/{workspace_slug}/payment_intents/{id}': 'ApprovalQueue#get',
+  'GET /control/v1/workspaces/{workspace_slug}/payment_intents/{id}/impact': 'ApprovalQueue#impact',
+  'POST /control/v1/workspaces/{workspace_slug}/payment_intents/{id}/approve':
+    'ApprovalQueue#approve',
+  'POST /control/v1/workspaces/{workspace_slug}/payment_intents/{id}/deny': 'ApprovalQueue#deny',
 }
 
 function sourceFiles(dir: string): string[] {
@@ -64,9 +66,9 @@ function collectCalls(): Set<string> {
       if (!raw.startsWith('/')) return
       found.add(`${method} ${normalize(raw)}`)
 
-      const isWorkspaceSuffix = !raw.startsWith('/v1/') && !raw.startsWith('/api/')
+      const isWorkspaceSuffix = !raw.startsWith('/control/v1/') && !raw.startsWith('/ledger/v1/')
       if (scoped && isWorkspaceSuffix) {
-        found.add(`${method} ${normalize(`/v1/workspaces/{}${raw}`)}`)
+        found.add(`${method} ${normalize(`/control/v1/workspaces/{}${raw}`)}`)
       }
     }
 
@@ -79,11 +81,11 @@ function collectCalls(): Set<string> {
 
     for (const match of source.matchAll(/this\.base\(\s*`([^`]*)`\s*\)/g)) {
       const suffix = match[1] ?? ''
-      found.add(`ANY ${normalize(`/v1/workspaces/{}${suffix}`)}`)
+      found.add(`ANY ${normalize(`/control/v1/workspaces/{}${suffix}`)}`)
     }
     for (const match of source.matchAll(/this\.base\(\s*'([^']*)'\s*\)/g)) {
       const suffix = match[1] ?? ''
-      found.add(`ANY ${normalize(`/v1/workspaces/{}${suffix}`)}`)
+      found.add(`ANY ${normalize(`/control/v1/workspaces/{}${suffix}`)}`)
     }
   }
   return found

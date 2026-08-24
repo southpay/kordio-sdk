@@ -39,7 +39,7 @@ export class AccountsResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<Account>(
       'POST',
-      '/api/v1/accounts',
+      '/ledger/v1/accounts',
       toRequestOptions(config, { body }),
     )
   }
@@ -47,7 +47,7 @@ export class AccountsResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<Account> {
     return await this.unwrap<Account>(
       'GET',
-      `/api/v1/accounts/${encodePathSegment(id)}`,
+      `/ledger/v1/accounts/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -56,7 +56,7 @@ export class AccountsResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<Account>(
       'PATCH',
-      `/api/v1/accounts/${encodePathSegment(id)}`,
+      `/ledger/v1/accounts/${encodePathSegment(id)}`,
       toRequestOptions(config, { body }),
     )
   }
@@ -72,13 +72,18 @@ export class AccountsResource extends Resource {
       fund_classification: params.fundClassification,
       custody_provider: params.custodyProvider,
     }
-    return await this.page<Account>('/api/v1/accounts', query, 'cursor', toRequestOptions(params))
+    return await this.page<Account>(
+      '/ledger/v1/accounts',
+      query,
+      'cursor',
+      toRequestOptions(params),
+    )
   }
 
   async balance(id: string, config?: RequestConfig): Promise<Balance> {
     return await this.unwrap<Balance>(
       'GET',
-      `/api/v1/accounts/${encodePathSegment(id)}/balance`,
+      `/ledger/v1/accounts/${encodePathSegment(id)}/balance`,
       toRequestOptions(config),
     )
   }
@@ -86,7 +91,7 @@ export class AccountsResource extends Resource {
   async categoryBalance(id: string, config?: RequestConfig): Promise<Balance> {
     return await this.unwrap<Balance>(
       'GET',
-      `/api/v1/accounts/${encodePathSegment(id)}/category_balance`,
+      `/ledger/v1/accounts/${encodePathSegment(id)}/category_balance`,
       toRequestOptions(config),
     )
   }
@@ -99,7 +104,7 @@ export class AccountsResource extends Resource {
     }
     return await this.unwrap<AccountStatement>(
       'GET',
-      `/api/v1/accounts/${encodePathSegment(id)}/statement`,
+      `/ledger/v1/accounts/${encodePathSegment(id)}/statement`,
       toRequestOptions(params, { query }),
     )
   }
@@ -107,7 +112,7 @@ export class AccountsResource extends Resource {
   async postings(id: string, params: ListParams = {}): Promise<Page<Posting>> {
     const query = { cursor: params.cursor, limit: params.limit }
     return await this.page<Posting>(
-      `/api/v1/accounts/${encodePathSegment(id)}/postings`,
+      `/ledger/v1/accounts/${encodePathSegment(id)}/postings`,
       query,
       'cursor',
       toRequestOptions(params),

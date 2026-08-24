@@ -182,7 +182,7 @@ describe('budgets and spend tokens', () => {
     ])
     const budget = await agent(server).budgets.create({ budgetCents: 50000, currency: 'USD' })
     expect(budget.remaining_cents).toBe(50000)
-    expect(server.last().url).toBe('https://api.test/v1/agent/budgets')
+    expect(server.last().url).toBe('https://api.test/control/v1/agent/budgets')
     expect(server.last().body).toEqual({ budget_cents: 50000, currency: 'USD' })
   })
 
@@ -217,7 +217,7 @@ describe('workspace client', () => {
     const server = mockFetch([{ body: { data: [], has_more: false, next_cursor: null } }])
     await workspace(server).agents.list({ limit: 10 })
     expect(server.last().url).toBe(
-      'https://api.test/v1/workspaces/acme-procurement/agents?limit=10',
+      'https://api.test/control/v1/workspaces/acme-procurement/agents?limit=10',
     )
     expect(server.last().headers.authorization).toBe('Bearer identity-token')
   })
@@ -240,7 +240,7 @@ describe('workspace client', () => {
     await workspace(server).actionIntents.approve('ai_1')
     expect(server.last().method).toBe('POST')
     expect(server.last().url).toBe(
-      'https://api.test/v1/workspaces/acme-procurement/action_intents/ai_1/approve',
+      'https://api.test/control/v1/workspaces/acme-procurement/action_intents/ai_1/approve',
     )
   })
 })

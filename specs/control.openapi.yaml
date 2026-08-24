@@ -80,7 +80,7 @@ tags:
 
 paths:
 
-  /v1/agent/actions:
+  /control/v1/agent/actions:
     post:
       tags: [Actions]
       operationId: authorizeAction
@@ -229,7 +229,7 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
-  /v1/agent/actions/simulate:
+  /control/v1/agent/actions/simulate:
     post:
       tags: [Actions]
       operationId: simulateAction
@@ -271,7 +271,7 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
-  /v1/agent/actions/{id}:
+  /control/v1/agent/actions/{id}:
     get:
       tags: [Actions]
       operationId: getAction
@@ -295,7 +295,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundForAgent'
 
-  /v1/agent/actions/{id}/complete:
+  /control/v1/agent/actions/{id}/complete:
     post:
       tags: [Actions]
       operationId: completeAction
@@ -330,7 +330,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/agent/actions/{id}/fail:
+  /control/v1/agent/actions/{id}/fail:
     post:
       tags: [Actions]
       operationId: failAction
@@ -373,7 +373,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/agent/budgets:
+  /control/v1/agent/budgets:
     post:
       tags: [Budgets]
       operationId: createSession
@@ -431,7 +431,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
-  /v1/agent/budgets/{id}:
+  /control/v1/agent/budgets/{id}:
     get:
       tags: [Budgets]
       operationId: getSession
@@ -453,7 +453,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundForAgent'
 
-  /v1/agent/spend_tokens:
+  /control/v1/agent/spend_tokens:
     post:
       tags: [Spend tokens]
       operationId: createSpendToken
@@ -516,7 +516,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
-  /v1/agent/payment_intents:
+  /control/v1/agent/payment_intents:
     post:
       tags: [Payment intents]
       operationId: createPaymentIntent
@@ -645,7 +645,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/agent/payment_intents/simulate:
+  /control/v1/agent/payment_intents/simulate:
     post:
       tags: [Payment intents]
       operationId: simulatePaymentIntent
@@ -687,7 +687,7 @@ paths:
         '401':
           $ref: '#/components/responses/AgentUnauthorized'
 
-  /v1/agent/payment_intents/{id}:
+  /control/v1/agent/payment_intents/{id}:
     get:
       tags: [Payment intents]
       operationId: getPaymentIntent
@@ -708,7 +708,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundForAgent'
 
-  /v1/agent/payment_intents/{id}/complete:
+  /control/v1/agent/payment_intents/{id}/complete:
     post:
       tags: [Payment intents]
       operationId: completePaymentIntent
@@ -743,7 +743,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/agent/payment_intents/{id}/fail:
+  /control/v1/agent/payment_intents/{id}/fail:
     post:
       tags: [Payment intents]
       operationId: failPaymentIntent
@@ -786,7 +786,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/cosign/consume:
+  /control/v1/cosign/consume:
     post:
       tags: [Cosignatures]
       operationId: consumeCosignature
@@ -846,7 +846,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/CosignatureVerificationInvalid'
 
-  /v1/cosign/verify:
+  /control/v1/cosign/verify:
     post:
       tags: [Cosignatures]
       operationId: verifyCosignature
@@ -950,7 +950,7 @@ paths:
                         x: { type: string }
                         y: { type: string }
 
-  /v1/workspaces:
+  /control/v1/workspaces:
     get:
       tags: [Workspaces]
       operationId: listWorkspaces
@@ -1012,7 +1012,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
-  /v1/workspaces/{workspace_slug}:
+  /control/v1/workspaces/{workspace_slug}:
     get:
       tags: [Workspaces]
       operationId: getWorkspace
@@ -1070,7 +1070,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/export:
+  /control/v1/workspaces/{workspace_slug}/export:
     get:
       tags: [Workspaces]
       operationId: exportWorkspace
@@ -1104,7 +1104,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/agents:
+  /control/v1/workspaces/{workspace_slug}/agents:
     get:
       tags: [Agents]
       operationId: listAgents
@@ -1222,7 +1222,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/agents/{id}:
+  /control/v1/workspaces/{workspace_slug}/agents/{id}:
     get:
       tags: [Agents]
       operationId: getAgent
@@ -1290,7 +1290,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
-  /v1/workspaces/{workspace_slug}/policies:
+  /control/v1/workspaces/{workspace_slug}/policies:
     get:
       tags: [Policies]
       operationId: listPolicies
@@ -1399,7 +1399,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/policies/{id}:
+  /control/v1/workspaces/{workspace_slug}/policies/{id}:
     get:
       tags: [Policies]
       operationId: getPolicy
@@ -1454,7 +1454,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
-  /v1/workspaces/{workspace_slug}/policy_modules:
+  /control/v1/workspaces/{workspace_slug}/policy_modules:
     get:
       tags: [Policy modules]
       operationId: listPolicyModules
@@ -1538,7 +1538,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
-  /v1/workspaces/{workspace_slug}/policy_modules/{name}:
+  /control/v1/workspaces/{workspace_slug}/policy_modules/{name}:
     get:
       tags: [Policy modules]
       operationId: getPolicyModule
@@ -1626,7 +1626,7 @@ paths:
                   message: Module vendor-allowlist is still imported by 2 policies
                   code: null
 
-  /v1/workspaces/{workspace_slug}/policy_previews:
+  /control/v1/workspaces/{workspace_slug}/policy_previews:
     post:
       tags: [Policy previews]
       operationId: createPolicyPreview
@@ -1687,7 +1687,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/funds:
+  /control/v1/workspaces/{workspace_slug}/funds:
     get:
       tags: [Funds]
       operationId: getFunds
@@ -1720,7 +1720,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/budgets:
+  /control/v1/workspaces/{workspace_slug}/budgets:
     get:
       tags: [Budgets]
       operationId: listWorkspaceSessions
@@ -1751,7 +1751,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/budgets/{id}:
+  /control/v1/workspaces/{workspace_slug}/budgets/{id}:
     get:
       tags: [Budgets]
       operationId: getWorkspaceSession
@@ -1771,7 +1771,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/spend_tokens:
+  /control/v1/workspaces/{workspace_slug}/spend_tokens:
     get:
       tags: [Spend tokens]
       operationId: listSpendTokens
@@ -1803,7 +1803,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/spend_tokens/{id}:
+  /control/v1/workspaces/{workspace_slug}/spend_tokens/{id}:
     get:
       tags: [Spend tokens]
       operationId: getSpendToken
@@ -1823,7 +1823,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/action_intents:
+  /control/v1/workspaces/{workspace_slug}/action_intents:
     get:
       tags: [Approvals]
       operationId: listActionIntents
@@ -1875,7 +1875,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/action_intents/{id}:
+  /control/v1/workspaces/{workspace_slug}/action_intents/{id}:
     get:
       tags: [Approvals]
       operationId: getActionIntent
@@ -1895,7 +1895,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/action_intents/{id}/impact:
+  /control/v1/workspaces/{workspace_slug}/action_intents/{id}/impact:
     get:
       tags: [Approvals]
       operationId: getActionIntentImpact
@@ -1929,7 +1929,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/action_intents/{id}/approve:
+  /control/v1/workspaces/{workspace_slug}/action_intents/{id}/approve:
     post:
       tags: [Approvals]
       operationId: approveActionIntent
@@ -1965,7 +1965,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/action_intents/{id}/deny:
+  /control/v1/workspaces/{workspace_slug}/action_intents/{id}/deny:
     post:
       tags: [Approvals]
       operationId: denyActionIntent
@@ -2006,7 +2006,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/payment_intents:
+  /control/v1/workspaces/{workspace_slug}/payment_intents:
     get:
       tags: [Approvals]
       operationId: listPaymentIntents
@@ -2053,7 +2053,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/payment_intents/{id}:
+  /control/v1/workspaces/{workspace_slug}/payment_intents/{id}:
     get:
       tags: [Approvals]
       operationId: getWorkspacePaymentIntent
@@ -2073,7 +2073,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/payment_intents/{id}/impact:
+  /control/v1/workspaces/{workspace_slug}/payment_intents/{id}/impact:
     get:
       tags: [Approvals]
       operationId: getPaymentIntentImpact
@@ -2100,7 +2100,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/payment_intents/{id}/approve:
+  /control/v1/workspaces/{workspace_slug}/payment_intents/{id}/approve:
     post:
       tags: [Approvals]
       operationId: approvePaymentIntent
@@ -2133,7 +2133,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/payment_intents/{id}/deny:
+  /control/v1/workspaces/{workspace_slug}/payment_intents/{id}/deny:
     post:
       tags: [Approvals]
       operationId: denyPaymentIntent
@@ -2171,7 +2171,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/audit_events:
+  /control/v1/workspaces/{workspace_slug}/audit_events:
     get:
       tags: [Audit events]
       operationId: listAuditEvents
@@ -2216,7 +2216,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/audit_events/{id}:
+  /control/v1/workspaces/{workspace_slug}/audit_events/{id}:
     get:
       tags: [Audit events]
       operationId: getAuditEvent
@@ -2239,7 +2239,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/webhook_endpoints:
+  /control/v1/workspaces/{workspace_slug}/webhook_endpoints:
     get:
       tags: [Webhook endpoints]
       operationId: listWebhookEndpoints
@@ -2329,7 +2329,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/webhook_endpoints/{id}:
+  /control/v1/workspaces/{workspace_slug}/webhook_endpoints/{id}:
     get:
       tags: [Webhook endpoints]
       operationId: getWebhookEndpoint
@@ -2369,7 +2369,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/webhook_endpoints/{id}/rotate:
+  /control/v1/workspaces/{workspace_slug}/webhook_endpoints/{id}/rotate:
     post:
       tags: [Webhook endpoints]
       operationId: rotateWebhookEndpointSecret
@@ -2401,7 +2401,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/memberships:
+  /control/v1/workspaces/{workspace_slug}/memberships:
     get:
       tags: [Members]
       operationId: listMemberships
@@ -2468,7 +2468,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/memberships/{id}:
+  /control/v1/workspaces/{workspace_slug}/memberships/{id}:
     patch:
       tags: [Members]
       operationId: updateMembership
@@ -2531,7 +2531,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/invitations:
+  /control/v1/workspaces/{workspace_slug}/invitations:
     get:
       tags: [Members]
       operationId: listInvitations
@@ -2599,7 +2599,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/invitations/{id}:
+  /control/v1/workspaces/{workspace_slug}/invitations/{id}:
     delete:
       tags: [Members]
       operationId: revokeInvitation
@@ -2618,7 +2618,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/invitations/lookup:
+  /control/v1/invitations/lookup:
     get:
       tags: [Members]
       operationId: lookupInvitation
@@ -2665,7 +2665,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/invitations/accept:
+  /control/v1/invitations/accept:
     post:
       tags: [Members]
       operationId: acceptInvitation
@@ -2701,7 +2701,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/billing:
+  /control/v1/workspaces/{workspace_slug}/billing:
     get:
       tags: [Billing]
       operationId: getBilling
@@ -2726,7 +2726,7 @@ paths:
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
-  /v1/workspaces/{workspace_slug}/billing/checkout:
+  /control/v1/workspaces/{workspace_slug}/billing/checkout:
     post:
       tags: [Billing]
       operationId: startBillingCheckout
@@ -2773,7 +2773,7 @@ paths:
         '403':
           $ref: '#/components/responses/InsufficientRole'
 
-  /v1/workspaces/{workspace_slug}/billing/packs:
+  /control/v1/workspaces/{workspace_slug}/billing/packs:
     post:
       tags: [Billing]
       operationId: buyVolumePack
@@ -2814,7 +2814,7 @@ paths:
         '403':
           $ref: '#/components/responses/InsufficientRole'
 
-  /v1/workspaces/{workspace_slug}/billing/portal:
+  /control/v1/workspaces/{workspace_slug}/billing/portal:
     post:
       tags: [Billing]
       operationId: openBillingPortal
@@ -2845,7 +2845,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /v1/workspaces/{workspace_slug}/billing/cancel:
+  /control/v1/workspaces/{workspace_slug}/billing/cancel:
     post:
       tags: [Billing]
       operationId: cancelSubscription
@@ -2870,7 +2870,7 @@ paths:
         '403':
           $ref: '#/components/responses/InsufficientRole'
 
-  /v1/workspaces/{workspace_slug}/billing/refresh:
+  /control/v1/workspaces/{workspace_slug}/billing/refresh:
     post:
       tags: [Billing]
       operationId: refreshBilling

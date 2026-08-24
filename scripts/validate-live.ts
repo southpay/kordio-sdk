@@ -284,7 +284,7 @@ async function validateLedger(): Promise<void> {
   })
 
   await step('rate limit headers reach the caller', async () => {
-    const res = await kordio.request('GET', '/api/v1/accounts', { query: { limit: 1 } })
+    const res = await kordio.request('GET', '/ledger/v1/accounts', { query: { limit: 1 } })
     return `remaining=${res.rateLimit.remaining}/${res.rateLimit.limit} request_id=${res.requestId}`
   })
 }

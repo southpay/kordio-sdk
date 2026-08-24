@@ -160,7 +160,7 @@ describe('token endpoint location', () => {
     await kordio.accounts.get('cash:usd')
 
     expect(t.calls[0]?.url).toBe('http://localhost:4000/oauth/token')
-    expect(t.calls[1]?.url).toBe('http://localhost:4000/api/v1/accounts/cash:usd')
+    expect(t.calls[1]?.url).toBe('http://localhost:4000/ledger/v1/accounts/cash:usd')
   })
 
   test('an explicit tokenUrl wins', async () => {

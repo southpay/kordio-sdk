@@ -47,7 +47,7 @@ abstract class ScopedResource extends Resource {
   }
 
   protected base(suffix: string): string {
-    return `/v1/workspaces/${encodePathSegment(this.workspace)}${suffix}`
+    return `/control/v1/workspaces/${encodePathSegment(this.workspace)}${suffix}`
   }
 
   protected listQuery(params: ListParams, extra: Record<string, unknown> = {}) {
@@ -567,7 +567,7 @@ export class WorkspacesResource extends Resource {
   async list(config?: RequestConfig): Promise<Workspace[]> {
     const body = await this.unwrap<Workspace[] | { data: Workspace[] }>(
       'GET',
-      '/v1/workspaces',
+      '/control/v1/workspaces',
       toRequestOptions(config),
     )
     return Array.isArray(body) ? body : ((body as { data: Workspace[] }).data ?? [])
@@ -577,7 +577,7 @@ export class WorkspacesResource extends Resource {
     const body = compact({ name: params.name, slug: params.slug })
     return await this.unwrap<Workspace>(
       'POST',
-      '/v1/workspaces',
+      '/control/v1/workspaces',
       toRequestOptions(params, { body }),
     )
   }
@@ -585,7 +585,7 @@ export class WorkspacesResource extends Resource {
   async get(slug: string, config?: RequestConfig): Promise<Workspace> {
     return await this.unwrap<Workspace>(
       'GET',
-      `/v1/workspaces/${encodePathSegment(slug)}`,
+      `/control/v1/workspaces/${encodePathSegment(slug)}`,
       toRequestOptions(config),
     )
   }
@@ -593,7 +593,7 @@ export class WorkspacesResource extends Resource {
   async delete(slug: string, params: RequestConfig & { confirm: string }): Promise<void> {
     await this.raw<void>(
       'DELETE',
-      `/v1/workspaces/${encodePathSegment(slug)}`,
+      `/control/v1/workspaces/${encodePathSegment(slug)}`,
       toRequestOptions(params, { body: { confirm: params.confirm } }),
     )
   }
@@ -601,7 +601,7 @@ export class WorkspacesResource extends Resource {
   async export(slug: string, config?: RequestConfig): Promise<WorkspaceExport> {
     return await this.unwrap<WorkspaceExport>(
       'GET',
-      `/v1/workspaces/${encodePathSegment(slug)}/export`,
+      `/control/v1/workspaces/${encodePathSegment(slug)}/export`,
       toRequestOptions(config),
     )
   }
@@ -609,7 +609,7 @@ export class WorkspacesResource extends Resource {
   async lookupInvitation(params: RequestConfig & { token: string }): Promise<Invitation> {
     return await this.unwrap<Invitation>(
       'GET',
-      '/v1/invitations/lookup',
+      '/control/v1/invitations/lookup',
       toRequestOptions(params, { query: { token: params.token } }),
     )
   }
@@ -617,7 +617,7 @@ export class WorkspacesResource extends Resource {
   async acceptInvitation(params: RequestConfig & { token: string }): Promise<Membership> {
     return await this.unwrap<Membership>(
       'POST',
-      '/v1/invitations/accept',
+      '/control/v1/invitations/accept',
       toRequestOptions(params, { body: { token: params.token } }),
     )
   }

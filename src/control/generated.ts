@@ -36,7 +36,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/actions": {
+    "/control/v1/agent/actions": {
         parameters: {
             query?: never;
             header?: never;
@@ -64,7 +64,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/actions/{id}": {
+    "/control/v1/agent/actions/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -84,7 +84,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/actions/{id}/complete": {
+    "/control/v1/agent/actions/{id}/complete": {
         parameters: {
             query?: never;
             header?: never;
@@ -108,7 +108,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/actions/{id}/fail": {
+    "/control/v1/agent/actions/{id}/fail": {
         parameters: {
             query?: never;
             header?: never;
@@ -128,7 +128,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/actions/simulate": {
+    "/control/v1/agent/actions/simulate": {
         parameters: {
             query?: never;
             header?: never;
@@ -153,7 +153,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/budgets": {
+    "/control/v1/agent/budgets": {
         parameters: {
             query?: never;
             header?: never;
@@ -177,7 +177,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/budgets/{id}": {
+    "/control/v1/agent/budgets/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -197,7 +197,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/payment_intents": {
+    "/control/v1/agent/payment_intents": {
         parameters: {
             query?: never;
             header?: never;
@@ -229,7 +229,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/payment_intents/{id}": {
+    "/control/v1/agent/payment_intents/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -246,7 +246,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/payment_intents/{id}/complete": {
+    "/control/v1/agent/payment_intents/{id}/complete": {
         parameters: {
             query?: never;
             header?: never;
@@ -270,7 +270,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/payment_intents/{id}/fail": {
+    "/control/v1/agent/payment_intents/{id}/fail": {
         parameters: {
             query?: never;
             header?: never;
@@ -290,7 +290,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/payment_intents/simulate": {
+    "/control/v1/agent/payment_intents/simulate": {
         parameters: {
             query?: never;
             header?: never;
@@ -310,7 +310,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agent/spend_tokens": {
+    "/control/v1/agent/spend_tokens": {
         parameters: {
             query?: never;
             header?: never;
@@ -339,7 +339,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cosign/consume": {
+    "/control/v1/cosign/consume": {
         parameters: {
             query?: never;
             header?: never;
@@ -367,7 +367,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cosign/verify": {
+    "/control/v1/cosign/verify": {
         parameters: {
             query?: never;
             header?: never;
@@ -398,7 +398,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/invitations/accept": {
+    "/control/v1/invitations/accept": {
         parameters: {
             query?: never;
             header?: never;
@@ -415,7 +415,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/invitations/lookup": {
+    "/control/v1/invitations/lookup": {
         parameters: {
             query?: never;
             header?: never;
@@ -435,7 +435,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces": {
+    "/control/v1/workspaces": {
         parameters: {
             query?: never;
             header?: never;
@@ -459,7 +459,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}": {
+    "/control/v1/workspaces/{workspace_slug}": {
         parameters: {
             query?: never;
             header?: never;
@@ -480,7 +480,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/action_intents": {
+    "/control/v1/workspaces/{workspace_slug}/action_intents": {
         parameters: {
             query?: never;
             header?: never;
@@ -500,7 +500,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/action_intents/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/action_intents/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -517,7 +517,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/action_intents/{id}/approve": {
+    "/control/v1/workspaces/{workspace_slug}/action_intents/{id}/approve": {
         parameters: {
             query?: never;
             header?: never;
@@ -543,7 +543,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/action_intents/{id}/deny": {
+    "/control/v1/workspaces/{workspace_slug}/action_intents/{id}/deny": {
         parameters: {
             query?: never;
             header?: never;
@@ -563,7 +563,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/action_intents/{id}/impact": {
+    "/control/v1/workspaces/{workspace_slug}/action_intents/{id}/impact": {
         parameters: {
             query?: never;
             header?: never;
@@ -591,7 +591,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/agents": {
+    "/control/v1/workspaces/{workspace_slug}/agents": {
         parameters: {
             query?: never;
             header?: never;
@@ -623,7 +623,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/agents/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/agents/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -648,7 +648,7 @@ export interface paths {
         patch: operations["updateAgent"];
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/audit_events": {
+    "/control/v1/workspaces/{workspace_slug}/audit_events": {
         parameters: {
             query?: never;
             header?: never;
@@ -672,7 +672,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/audit_events/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/audit_events/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -689,7 +689,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/billing": {
+    "/control/v1/workspaces/{workspace_slug}/billing": {
         parameters: {
             query?: never;
             header?: never;
@@ -709,7 +709,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/billing/cancel": {
+    "/control/v1/workspaces/{workspace_slug}/billing/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -729,7 +729,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/billing/checkout": {
+    "/control/v1/workspaces/{workspace_slug}/billing/checkout": {
         parameters: {
             query?: never;
             header?: never;
@@ -749,7 +749,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/billing/packs": {
+    "/control/v1/workspaces/{workspace_slug}/billing/packs": {
         parameters: {
             query?: never;
             header?: never;
@@ -769,7 +769,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/billing/portal": {
+    "/control/v1/workspaces/{workspace_slug}/billing/portal": {
         parameters: {
             query?: never;
             header?: never;
@@ -789,7 +789,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/billing/refresh": {
+    "/control/v1/workspaces/{workspace_slug}/billing/refresh": {
         parameters: {
             query?: never;
             header?: never;
@@ -809,7 +809,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/budgets": {
+    "/control/v1/workspaces/{workspace_slug}/budgets": {
         parameters: {
             query?: never;
             header?: never;
@@ -826,7 +826,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/budgets/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/budgets/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -843,7 +843,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/export": {
+    "/control/v1/workspaces/{workspace_slug}/export": {
         parameters: {
             query?: never;
             header?: never;
@@ -863,7 +863,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/funds": {
+    "/control/v1/workspaces/{workspace_slug}/funds": {
         parameters: {
             query?: never;
             header?: never;
@@ -891,7 +891,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/invitations": {
+    "/control/v1/workspaces/{workspace_slug}/invitations": {
         parameters: {
             query?: never;
             header?: never;
@@ -912,7 +912,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/invitations/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/invitations/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -932,7 +932,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/memberships": {
+    "/control/v1/workspaces/{workspace_slug}/memberships": {
         parameters: {
             query?: never;
             header?: never;
@@ -953,7 +953,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/memberships/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/memberships/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -977,7 +977,7 @@ export interface paths {
         patch: operations["updateMembership"];
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/payment_intents": {
+    "/control/v1/workspaces/{workspace_slug}/payment_intents": {
         parameters: {
             query?: never;
             header?: never;
@@ -994,7 +994,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/payment_intents/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/payment_intents/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1011,7 +1011,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/payment_intents/{id}/approve": {
+    "/control/v1/workspaces/{workspace_slug}/payment_intents/{id}/approve": {
         parameters: {
             query?: never;
             header?: never;
@@ -1034,7 +1034,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/payment_intents/{id}/deny": {
+    "/control/v1/workspaces/{workspace_slug}/payment_intents/{id}/deny": {
         parameters: {
             query?: never;
             header?: never;
@@ -1054,7 +1054,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/payment_intents/{id}/impact": {
+    "/control/v1/workspaces/{workspace_slug}/payment_intents/{id}/impact": {
         parameters: {
             query?: never;
             header?: never;
@@ -1074,7 +1074,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/policies": {
+    "/control/v1/workspaces/{workspace_slug}/policies": {
         parameters: {
             query?: never;
             header?: never;
@@ -1103,7 +1103,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/policies/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/policies/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1124,7 +1124,7 @@ export interface paths {
         patch: operations["updatePolicy"];
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/policy_modules": {
+    "/control/v1/workspaces/{workspace_slug}/policy_modules": {
         parameters: {
             query?: never;
             header?: never;
@@ -1154,7 +1154,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/policy_modules/{name}": {
+    "/control/v1/workspaces/{workspace_slug}/policy_modules/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1182,7 +1182,7 @@ export interface paths {
         patch: operations["updatePolicyModule"];
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/policy_previews": {
+    "/control/v1/workspaces/{workspace_slug}/policy_previews": {
         parameters: {
             query?: never;
             header?: never;
@@ -1211,7 +1211,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/spend_tokens": {
+    "/control/v1/workspaces/{workspace_slug}/spend_tokens": {
         parameters: {
             query?: never;
             header?: never;
@@ -1231,7 +1231,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/spend_tokens/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/spend_tokens/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1248,7 +1248,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/webhook_endpoints": {
+    "/control/v1/workspaces/{workspace_slug}/webhook_endpoints": {
         parameters: {
             query?: never;
             header?: never;
@@ -1275,7 +1275,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/webhook_endpoints/{id}": {
+    "/control/v1/workspaces/{workspace_slug}/webhook_endpoints/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1296,7 +1296,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_slug}/webhook_endpoints/{id}/rotate": {
+    "/control/v1/workspaces/{workspace_slug}/webhook_endpoints/{id}/rotate": {
         parameters: {
             query?: never;
             header?: never;

@@ -49,7 +49,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/_meta/capabilities": {
+    "/healthz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liveness + DB probe */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Healthy */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            checks?: {
+                                database?: boolean;
+                            };
+                            /** @enum {string} */
+                            status?: "ok";
+                            version?: string;
+                        };
+                    };
+                };
+                /** @description Degraded (database unreachable) */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ledger/v1/_meta/capabilities": {
         parameters: {
             query?: never;
             header?: never;
@@ -189,7 +239,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/account_templates": {
+    "/ledger/v1/account_templates": {
         parameters: {
             query?: never;
             header?: never;
@@ -312,7 +362,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/account_templates/{name}": {
+    "/ledger/v1/account_templates/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -350,7 +400,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/accounts": {
+    "/ledger/v1/accounts": {
         parameters: {
             query?: never;
             header?: never;
@@ -456,7 +506,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/accounts/{id}": {
+    "/ledger/v1/accounts/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -496,7 +546,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/accounts/{id}/balance": {
+    "/ledger/v1/accounts/{id}/balance": {
         parameters: {
             query?: never;
             header?: never;
@@ -547,7 +597,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/accounts/{id}/category_balance": {
+    "/ledger/v1/accounts/{id}/category_balance": {
         parameters: {
             query?: never;
             header?: never;
@@ -593,7 +643,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/accounts/{id}/postings": {
+    "/ledger/v1/accounts/{id}/postings": {
         parameters: {
             query?: never;
             header?: never;
@@ -651,7 +701,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/accounts/{id}/statement": {
+    "/ledger/v1/accounts/{id}/statement": {
         parameters: {
             query?: never;
             header?: never;
@@ -708,7 +758,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/events": {
+    "/ledger/v1/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -772,7 +822,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/events/{id}": {
+    "/ledger/v1/events/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -811,7 +861,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/exports": {
+    "/ledger/v1/exports": {
         parameters: {
             query?: never;
             header?: never;
@@ -894,7 +944,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/exports/{id}": {
+    "/ledger/v1/exports/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -939,7 +989,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/external_transactions": {
+    "/ledger/v1/external_transactions": {
         parameters: {
             query?: never;
             header?: never;
@@ -996,7 +1046,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/external_transactions/{id}": {
+    "/ledger/v1/external_transactions/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1033,7 +1083,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/external_transactions/{id}/ignore": {
+    "/ledger/v1/external_transactions/{id}/ignore": {
         parameters: {
             query?: never;
             header?: never;
@@ -1088,7 +1138,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/external_transactions/{id}/match": {
+    "/ledger/v1/external_transactions/{id}/match": {
         parameters: {
             query?: never;
             header?: never;
@@ -1151,7 +1201,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/external_transactions/{id}/matches": {
+    "/ledger/v1/external_transactions/{id}/matches": {
         parameters: {
             query?: never;
             header?: never;
@@ -1190,7 +1240,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/external_transactions/{id}/unmatch": {
+    "/ledger/v1/external_transactions/{id}/unmatch": {
         parameters: {
             query?: never;
             header?: never;
@@ -1244,7 +1294,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/inbound/sources/{token}": {
+    "/ledger/v1/inbound/sources/{token}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1301,7 +1351,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/ledgers": {
+    "/ledger/v1/ledgers": {
         parameters: {
             query?: never;
             header?: never;
@@ -1381,7 +1431,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/ledgers/{id}": {
+    "/ledger/v1/ledgers/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1451,7 +1501,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/api/v1/oauth_clients": {
+    "/ledger/v1/oauth_clients": {
         parameters: {
             query?: never;
             header?: never;
@@ -1552,7 +1602,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/oauth_clients/{id}": {
+    "/ledger/v1/oauth_clients/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1617,7 +1667,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/oauth_clients/{id}/rotate_secret": {
+    "/ledger/v1/oauth_clients/{id}/rotate_secret": {
         parameters: {
             query?: never;
             header?: never;
@@ -1678,7 +1728,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/organizations/me": {
+    "/ledger/v1/organizations/me": {
         parameters: {
             query?: never;
             header?: never;
@@ -1718,7 +1768,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/period_closes": {
+    "/ledger/v1/period_closes": {
         parameters: {
             query?: never;
             header?: never;
@@ -1808,7 +1858,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/period_closes/{id}": {
+    "/ledger/v1/period_closes/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1845,7 +1895,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/period_closes/{id}/reopen": {
+    "/ledger/v1/period_closes/{id}/reopen": {
         parameters: {
             query?: never;
             header?: never;
@@ -1904,7 +1954,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/postings": {
+    "/ledger/v1/postings": {
         parameters: {
             query?: never;
             header?: never;
@@ -1970,7 +2020,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/postings/{id}/reconciliations": {
+    "/ledger/v1/postings/{id}/reconciliations": {
         parameters: {
             query?: never;
             header?: never;
@@ -2019,7 +2069,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reconciliation_runs": {
+    "/ledger/v1/reconciliation_runs": {
         parameters: {
             query?: never;
             header?: never;
@@ -2169,7 +2219,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reconciliation_runs/{id}": {
+    "/ledger/v1/reconciliation_runs/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2206,7 +2256,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reports/balance_sheet": {
+    "/ledger/v1/reports/balance_sheet": {
         parameters: {
             query?: never;
             header?: never;
@@ -2250,7 +2300,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reports/cash_flow": {
+    "/ledger/v1/reports/cash_flow": {
         parameters: {
             query?: never;
             header?: never;
@@ -2294,7 +2344,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reports/fund_segregation": {
+    "/ledger/v1/reports/fund_segregation": {
         parameters: {
             query?: never;
             header?: never;
@@ -2352,7 +2402,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reports/income_statement": {
+    "/ledger/v1/reports/income_statement": {
         parameters: {
             query?: never;
             header?: never;
@@ -2396,7 +2446,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reports/reserves_outstanding": {
+    "/ledger/v1/reports/reserves_outstanding": {
         parameters: {
             query?: never;
             header?: never;
@@ -2437,7 +2487,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reports/trial_balance": {
+    "/ledger/v1/reports/trial_balance": {
         parameters: {
             query?: never;
             header?: never;
@@ -2488,7 +2538,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reserves": {
+    "/ledger/v1/reserves": {
         parameters: {
             query?: never;
             header?: never;
@@ -2565,7 +2615,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reserves/{id}/claw": {
+    "/ledger/v1/reserves/{id}/claw": {
         parameters: {
             query?: never;
             header?: never;
@@ -2639,7 +2689,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reserves/{id}/release": {
+    "/ledger/v1/reserves/{id}/release": {
         parameters: {
             query?: never;
             header?: never;
@@ -2712,7 +2762,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sources": {
+    "/ledger/v1/sources": {
         parameters: {
             query?: never;
             header?: never;
@@ -2810,7 +2860,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sources/{id}": {
+    "/ledger/v1/sources/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2868,7 +2918,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/api/v1/sources/{id}/inbound": {
+    "/ledger/v1/sources/{id}/inbound": {
         parameters: {
             query?: never;
             header?: never;
@@ -2941,7 +2991,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sources/{source_id}/external_transactions": {
+    "/ledger/v1/sources/{source_id}/external_transactions": {
         parameters: {
             query?: never;
             header?: never;
@@ -3017,7 +3067,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sources/{source_id}/reconciliation_runs": {
+    "/ledger/v1/sources/{source_id}/reconciliation_runs": {
         parameters: {
             query?: never;
             header?: never;
@@ -3089,7 +3139,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tenants/me/anonymize": {
+    "/ledger/v1/tenants/me/anonymize": {
         parameters: {
             query?: never;
             header?: never;
@@ -3166,7 +3216,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/transactions": {
+    "/ledger/v1/transactions": {
         parameters: {
             query?: never;
             header?: never;
@@ -3298,7 +3348,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/transactions/{id}": {
+    "/ledger/v1/transactions/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3425,7 +3475,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/api/v1/transactions/{id}/commit": {
+    "/ledger/v1/transactions/{id}/commit": {
         parameters: {
             query?: never;
             header?: never;
@@ -3481,7 +3531,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/transactions/{id}/refund": {
+    "/ledger/v1/transactions/{id}/refund": {
         parameters: {
             query?: never;
             header?: never;
@@ -3599,7 +3649,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/transactions/{id}/reverse": {
+    "/ledger/v1/transactions/{id}/reverse": {
         parameters: {
             query?: never;
             header?: never;
@@ -3671,7 +3721,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/transactions/bulk": {
+    "/ledger/v1/transactions/bulk": {
         parameters: {
             query?: never;
             header?: never;
@@ -3740,7 +3790,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/transactions/lookup": {
+    "/ledger/v1/transactions/lookup": {
         parameters: {
             query?: never;
             header?: never;
@@ -3817,7 +3867,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhook_deliveries/{id}": {
+    "/ledger/v1/webhook_deliveries/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3856,7 +3906,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhook_deliveries/{id}/redeliver": {
+    "/ledger/v1/webhook_deliveries/{id}/redeliver": {
         parameters: {
             query?: never;
             header?: never;
@@ -3922,7 +3972,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhook_endpoints": {
+    "/ledger/v1/webhook_endpoints": {
         parameters: {
             query?: never;
             header?: never;
@@ -3987,7 +4037,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhook_endpoints/{id}": {
+    "/ledger/v1/webhook_endpoints/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -4079,7 +4129,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/api/v1/webhook_endpoints/{id}/deliveries": {
+    "/ledger/v1/webhook_endpoints/{id}/deliveries": {
         parameters: {
             query?: never;
             header?: never;
@@ -4140,7 +4190,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhook_endpoints/{id}/deliveries/failed_count": {
+    "/ledger/v1/webhook_endpoints/{id}/deliveries/failed_count": {
         parameters: {
             query?: never;
             header?: never;
@@ -4196,7 +4246,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhook_endpoints/{id}/rotate_secret": {
+    "/ledger/v1/webhook_endpoints/{id}/rotate_secret": {
         parameters: {
             query?: never;
             header?: never;
@@ -4272,7 +4322,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhook_endpoints/{id}/test_send": {
+    "/ledger/v1/webhook_endpoints/{id}/test_send": {
         parameters: {
             query?: never;
             header?: never;
@@ -4343,56 +4393,6 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/healthz": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Liveness + DB probe */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Healthy */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            checks?: {
-                                database?: boolean;
-                            };
-                            /** @enum {string} */
-                            status?: "ok";
-                            version?: string;
-                        };
-                    };
-                };
-                /** @description Degraded (database unreachable) */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;

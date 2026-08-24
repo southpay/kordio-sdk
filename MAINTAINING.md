@@ -46,7 +46,7 @@ Generated code goes stale quietly, so both failure modes are checked.
 
 **`bun run check:coverage`** parses both specs, then parses the SDK source for the paths it actually calls, and fails on any operation no method reaches. When someone adds an endpoint to a spec, this is what tells you. Every exception is explicit and lives in `scripts/check-coverage.ts`:
 
-`INTENTIONALLY_UNWRAPPED` lists operations that should not have a method, each with a reason. `DELETE /api/v1/transactions/{id}` is a documented `405` because the ledger is append-only. `POST /oauth/token` is handled inside the auth provider.
+`INTENTIONALLY_UNWRAPPED` lists operations that should not have a method, each with a reason. `DELETE /ledger/v1/transactions/{id}` is a documented `405` because the ledger is append-only. `POST /oauth/token` is handled inside the auth provider.
 
 `COVERED_BY` lists operations served by a method whose path is built dynamically, so the static scan cannot see it. The shared `ApprovalQueue` and the cosign calls are the two cases. Each entry names the class and method that serves it, and the checker confirms that symbol still exists, so renaming the method fails the build instead of leaving a stale exemption behind.
 
@@ -59,7 +59,7 @@ Generated clients are unpleasant to use, so the resource layer is written by han
 - **Signed amounts.** `amount: -1200` becomes `{ amount: '1200', direction: 'credit' }`. Callers think in signed deltas; the API wants magnitude plus direction.
 - **Big amounts.** Ledger amounts are `numeric(38,0)`. Floats are rejected, unsafe integers are rejected, `bigint` and decimal strings pass through. An 18-decimal token amount must never round-trip through a JS `Number`.
 - **Balance before the round trip.** Postings are checked per currency client-side, so an unbalanced write fails with a message naming the currency instead of a `422`.
-- **Decisions are not exceptions.** `POST /v1/agent/actions` answers `201`, `202` or `403` and all three are answers. `actions.authorize()` returns a discriminated union on `outcome`, and only genuine failures throw. If a denial surfaces as a caught exception, whoever wrote the catch block will eventually retry into it.
+- **Decisions are not exceptions.** `POST /control/v1/agent/actions` answers `201`, `202` or `403` and all three are answers. `actions.authorize()` returns a discriminated union on `outcome`, and only genuine failures throw. If a denial surfaces as a caught exception, whoever wrote the catch block will eventually retry into it.
 - **Two control clients.** An agent key and an identity token are deliberately not interchangeable. `KordioAgent` and `KordioWorkspace` are separate classes so the type system carries that boundary instead of a comment.
 - **Idempotency keys are required, not generated.** The ledger's contract is that a key returns the same transaction forever. Generating one per call would make internal retries safe and cross-process retries meaningless, so the SDK asks for one and says why.
 
@@ -112,7 +112,7 @@ The generation step is the only language-specific piece. `specs/` is the contrac
 
 Worth fixing in `docs-kordio`, currently worked around here:
 
-- The spend control spec still calls a budget a `Session`: schema `Session`/`SessionEnvelope`, operation ids `createSession`/`getSession`. The paths are already `/v1/agent/budgets` and the fields are `budget_cents`, `remaining_cents`, `parent_budget_id`. The SDK exposes `Budget` and aliases it to `Schemas['Session']`. When the spec is renamed, change the alias in `src/control/types.ts`; nothing else moves.
+- The spend control spec still calls a budget a `Session`: schema `Session`/`SessionEnvelope`, operation ids `createSession`/`getSession`. The paths are already `/control/v1/agent/budgets` and the fields are `budget_cents`, `remaining_cents`, `parent_budget_id`. The SDK exposes `Budget` and aliases it to `Schemas['Session']`. When the spec is renamed, change the alias in `src/control/types.ts`; nothing else moves.
 - Ledger list responses reference a generic `List` schema with no item type, so list item types are supplied by hand in the resource methods rather than generated. Giving each list endpoint a typed `data` array in the spec would let those come from the generator too.
 - Most control schemas declare no `required` fields, so every property in `src/control/generated.ts` is optional and callers write `budget.id ?? ''`. The ledger spec marks required fields properly (`Account`, `Transaction`, `Balance`), and its generated types are correspondingly sharper. Adding `required` to the control schemas would remove a lot of `??` from user code without touching a line of SDK source.
 - `GET /v1/accounts?kind=` accepts `standard | reserve`, but the `account_kind` field it filters on is `standard | restricted`, so the documented filter value `reserve` matches no field value. The SDK carries both: `AccountKindFilter` for the query and `AccountKind` for the field. One of the two enums is wrong upstream.

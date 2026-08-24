@@ -28,14 +28,14 @@ export class WebhookEndpointsResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<WebhookEndpoint>(
       'POST',
-      '/api/v1/webhook_endpoints',
+      '/ledger/v1/webhook_endpoints',
       toRequestOptions(config, { body }),
     )
   }
 
   async list(params: ListParams = {}): Promise<Page<WebhookEndpoint>> {
     return await this.page<WebhookEndpoint>(
-      '/api/v1/webhook_endpoints',
+      '/ledger/v1/webhook_endpoints',
       { cursor: params.cursor, limit: params.limit },
       'cursor',
       toRequestOptions(params),
@@ -45,7 +45,7 @@ export class WebhookEndpointsResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<WebhookEndpoint> {
     return await this.unwrap<WebhookEndpoint>(
       'GET',
-      `/api/v1/webhook_endpoints/${encodePathSegment(id)}`,
+      `/ledger/v1/webhook_endpoints/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -54,7 +54,7 @@ export class WebhookEndpointsResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<WebhookEndpoint>(
       'PATCH',
-      `/api/v1/webhook_endpoints/${encodePathSegment(id)}`,
+      `/ledger/v1/webhook_endpoints/${encodePathSegment(id)}`,
       toRequestOptions(config, { body }),
     )
   }
@@ -62,7 +62,7 @@ export class WebhookEndpointsResource extends Resource {
   async delete(id: string, config?: RequestConfig): Promise<void> {
     await this.raw<void>(
       'DELETE',
-      `/api/v1/webhook_endpoints/${encodePathSegment(id)}`,
+      `/ledger/v1/webhook_endpoints/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -70,7 +70,7 @@ export class WebhookEndpointsResource extends Resource {
   async rotateSecret(id: string, config: IdempotentRequestConfig): Promise<WebhookEndpoint> {
     return await this.unwrap<WebhookEndpoint>(
       'POST',
-      `/api/v1/webhook_endpoints/${encodePathSegment(id)}/rotate_secret`,
+      `/ledger/v1/webhook_endpoints/${encodePathSegment(id)}/rotate_secret`,
       toRequestOptions(config, { idempotencyKey: config.idempotencyKey }),
     )
   }
@@ -78,7 +78,7 @@ export class WebhookEndpointsResource extends Resource {
   async deliveries(id: string, params: DeliveryListParams = {}): Promise<Page<WebhookDelivery>> {
     const query = { cursor: params.cursor, limit: params.limit, status: params.status }
     return await this.page<WebhookDelivery>(
-      `/api/v1/webhook_endpoints/${encodePathSegment(id)}/deliveries`,
+      `/ledger/v1/webhook_endpoints/${encodePathSegment(id)}/deliveries`,
       query,
       'cursor',
       toRequestOptions(params),
@@ -94,7 +94,7 @@ export class WebhookEndpointsResource extends Resource {
     }
     return await this.unwrap<{ count: number }>(
       'GET',
-      `/api/v1/webhook_endpoints/${encodePathSegment(id)}/deliveries/failed_count`,
+      `/ledger/v1/webhook_endpoints/${encodePathSegment(id)}/deliveries/failed_count`,
       toRequestOptions(params, { query }),
     )
   }
@@ -109,7 +109,7 @@ export class WebhookEndpointsResource extends Resource {
     const body = { event_type: params.eventType, payload: params.payload }
     return await this.unwrap<WebhookDelivery>(
       'POST',
-      `/api/v1/webhook_endpoints/${encodePathSegment(id)}/test_send`,
+      `/ledger/v1/webhook_endpoints/${encodePathSegment(id)}/test_send`,
       toRequestOptions(params, { body, idempotencyKey: params.idempotencyKey }),
     )
   }
@@ -119,7 +119,7 @@ export class WebhookDeliveriesResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<WebhookDelivery> {
     return await this.unwrap<WebhookDelivery>(
       'GET',
-      `/api/v1/webhook_deliveries/${encodePathSegment(id)}`,
+      `/ledger/v1/webhook_deliveries/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -127,7 +127,7 @@ export class WebhookDeliveriesResource extends Resource {
   async redeliver(id: string, config: IdempotentRequestConfig): Promise<WebhookDelivery> {
     return await this.unwrap<WebhookDelivery>(
       'POST',
-      `/api/v1/webhook_deliveries/${encodePathSegment(id)}/redeliver`,
+      `/ledger/v1/webhook_deliveries/${encodePathSegment(id)}/redeliver`,
       toRequestOptions(config, { idempotencyKey: config.idempotencyKey }),
     )
   }

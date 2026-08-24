@@ -26,7 +26,12 @@ export class PostingsResource extends Resource {
           ? params.beforeValueDate.toISOString()
           : params.beforeValueDate,
     }
-    return await this.page<Posting>('/api/v1/postings', query, 'cursor', toRequestOptions(params))
+    return await this.page<Posting>(
+      '/ledger/v1/postings',
+      query,
+      'cursor',
+      toRequestOptions(params),
+    )
   }
 
   async reconcile<T = unknown>(
@@ -39,7 +44,7 @@ export class PostingsResource extends Resource {
     }
     return await this.unwrap<T>(
       'POST',
-      `/api/v1/postings/${encodePathSegment(String(id))}/reconciliations`,
+      `/ledger/v1/postings/${encodePathSegment(String(id))}/reconciliations`,
       toRequestOptions(params, { body }),
     )
   }

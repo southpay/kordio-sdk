@@ -36,7 +36,7 @@ describe('transactions.create', () => {
 
     const request = server.last()
     expect(request.method).toBe('POST')
-    expect(request.url).toBe('https://api.test/api/v1/transactions')
+    expect(request.url).toBe('https://api.test/ledger/v1/transactions')
     expect(request.headers['idempotency-key']).toBe('order:4471:debit')
     expect(request.body).toEqual({
       postings: [
@@ -254,7 +254,7 @@ describe('balances', () => {
     ])
     const balance = await client(server).balances.get('accounts_receivable:acme')
     expect(server.last().url).toBe(
-      'https://api.test/api/v1/accounts/accounts_receivable:acme/balance',
+      'https://api.test/ledger/v1/accounts/accounts_receivable:acme/balance',
     )
     expect(BigInt(balance.available ?? '0')).toBe(9700000n)
   })
@@ -262,7 +262,7 @@ describe('balances', () => {
   test('accounts.balance hits the same endpoint', async () => {
     const server = mockFetch([{ body: ledgerEnvelope({ object: 'balance' }) }])
     await client(server).accounts.balance('cash:usd')
-    expect(server.last().url).toBe('https://api.test/api/v1/accounts/cash:usd/balance')
+    expect(server.last().url).toBe('https://api.test/ledger/v1/accounts/cash:usd/balance')
   })
 })
 
@@ -271,7 +271,7 @@ describe('path encoding', () => {
     const server = mockFetch([{ body: ledgerEnvelope({}) }])
     await client(server).accounts.get('accounts_payable:onchain/acme')
     expect(server.last().url).toBe(
-      'https://api.test/api/v1/accounts/accounts_payable:onchain%2Facme',
+      'https://api.test/ledger/v1/accounts/accounts_payable:onchain%2Facme',
     )
   })
 })
@@ -301,7 +301,7 @@ describe('contract details the live API taught us', () => {
       value: '0xabc123',
     })
     const url = new URL(server.last().url)
-    expect(url.pathname).toBe('/api/v1/transactions/lookup')
+    expect(url.pathname).toBe('/ledger/v1/transactions/lookup')
     expect(Object.fromEntries(url.searchParams)).toEqual({
       rail: 'ethereum',
       kind: 'tx_hash',
@@ -367,6 +367,6 @@ describe('default base url', () => {
 
     await kordio.accounts.list()
 
-    expect(server.last().url).toBe('https://api.kordio.io/api/v1/accounts')
+    expect(server.last().url).toBe('https://api.kordio.io/ledger/v1/accounts')
   })
 })

@@ -10,13 +10,15 @@ export type CosignatureCheck =
 
 export class CosignResource extends Resource {
   async verify(params: RequestConfig & { authorization: string }): Promise<CosignatureCheck> {
-    return await this.call('/v1/cosign/verify', params, { authorization: params.authorization })
+    return await this.call('/control/v1/cosign/verify', params, {
+      authorization: params.authorization,
+    })
   }
 
   async consume(
     params: RequestConfig & { authorization: string; consumedBy?: string },
   ): Promise<CosignatureCheck> {
-    return await this.call('/v1/cosign/consume', params, {
+    return await this.call('/control/v1/cosign/consume', params, {
       authorization: params.authorization,
       consumed_by: params.consumedBy,
     })
