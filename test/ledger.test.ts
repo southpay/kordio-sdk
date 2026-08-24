@@ -370,3 +370,35 @@ describe('default base url', () => {
     expect(server.last().url).toBe('https://api.kordio.io/ledger/v1/accounts')
   })
 })
+
+describe('inbound endpoints return the source', () => {
+  test('enableInbound gives back the source, carrying the one-time secret', async () => {
+    const server = mockFetch([
+      {
+        status: 201,
+        body: ledgerEnvelope({
+          object: 'source',
+          id: 'src_1',
+          name: 'cobo',
+          kind: 'custody',
+          inbound_enabled: true,
+          inbound_url: 'https://api.kordio.io/ledger/v1/inbound/sources/insrc_abc',
+          inbound_secret: 'inbsec_xyz',
+        }),
+      },
+    ])
+    const source = await client(server).sources.enableInbound('src_1')
+    expect(source.object).toBe('source')
+    expect(source.inbound_url).toContain('/ledger/v1/inbound/sources/')
+    expect(source.inbound_secret).toBe('inbsec_xyz')
+  })
+
+  test('disableInbound returns the source too, not an empty body', async () => {
+    const server = mockFetch([
+      { body: ledgerEnvelope({ object: 'source', id: 'src_1', inbound_enabled: false }) },
+    ])
+    const source = await client(server).sources.disableInbound('src_1')
+    expect(source.inbound_enabled).toBe(false)
+    expect(server.last().method).toBe('DELETE')
+  })
+})

@@ -20,7 +20,7 @@ function concrete(path: string): string {
   return path.replace(/\{[^}]+\}/g, PLACEHOLDER)
 }
 
-async function probe(method: string, path: string) {
+async function once(method: string, path: string): Promise<number> {
   const res = await fetch(`${BASE}${concrete(path)}`, {
     method,
     headers: { 'content-type': 'application/json' },
@@ -28,6 +28,14 @@ async function probe(method: string, path: string) {
     redirect: 'manual',
   })
   return res.status
+}
+
+async function probe(method: string, path: string): Promise<number> {
+  const first = await once(method, path)
+  if (first !== 404 && first !== 429) return first
+
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  return await once(method, path)
 }
 
 const missing: string[] = []

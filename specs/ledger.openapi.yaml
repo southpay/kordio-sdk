@@ -844,6 +844,194 @@ components:
               uncategorized: { type: string }
               net_change: { type: string }
 
+    Source:
+      type: object
+      required: [object, id, name, kind, created_at, updated_at]
+      properties:
+        object: { type: string, enum: [source] }
+        id: { type: string, format: uuid }
+        name: { type: string, example: cobo }
+        kind:
+          type: string
+          default: custom
+          description: Connector kind. Selects the inbound payload adapter.
+        description: { type: string, nullable: true }
+        implicit:
+          type: boolean
+          description: True for sources the platform created on your behalf.
+        default_strategy: { type: string, enum: [exact, sum_in_window], nullable: true }
+        default_window_seconds: { type: integer, nullable: true }
+        default_tolerance_minor_units: { type: string, nullable: true }
+        default_account_id: { type: string, nullable: true }
+        inbound_enabled: { type: boolean }
+        inbound_url:
+          type: string
+          nullable: true
+          description: Present once inbound is enabled. Post signed payloads here.
+        inbound_secret:
+          type: string
+          description: Returned only when inbound is enabled or the secret is rotated. Never returned again.
+        sync_enabled: { type: boolean }
+        sync_status: { type: string }
+        sync_error: { type: string, nullable: true }
+        connected_ref: { type: string, nullable: true }
+        last_synced_at: { type: string, format: date-time, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ExternalTransaction:
+      type: object
+      required: [object, id, source_id, external_id, amount, currency, status, created_at]
+      properties:
+        object: { type: string, enum: [external_transaction] }
+        id: { type: string, format: uuid }
+        source_id: { type: string, format: uuid }
+        external_id:
+          type: string
+          description: The identifier the source gave this movement. Unique per source.
+        amount: { type: string, pattern: '^-?\d+$' }
+        currency: { type: string }
+        status: { type: string, enum: [open, matched, ignored] }
+        account_id: { type: string, nullable: true }
+        occurred_at: { type: string, format: date-time, nullable: true }
+        matched_at: { type: string, format: date-time, nullable: true }
+        ignored_reason: { type: string, nullable: true }
+        reconciliation_run_id: { type: string, format: uuid, nullable: true }
+        reconciliation_match_id: { type: string, format: uuid, nullable: true }
+        reference_rail: { type: string, nullable: true }
+        reference_kind: { type: string, nullable: true }
+        reference_value: { type: string, nullable: true }
+        raw: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+
+    IngestResult:
+      type: object
+      required: [object, source_id, created_count, replayed_count, error_count, results]
+      properties:
+        object: { type: string, enum: [ingest_result] }
+        source_id: { type: string, format: uuid }
+        created_count: { type: integer }
+        replayed_count: { type: integer }
+        error_count: { type: integer }
+        results:
+          type: array
+          items:
+            type: object
+            required: [external_id, status]
+            properties:
+              external_id: { type: string }
+              status: { type: string, enum: [created, replayed, error] }
+              external_transaction: { $ref: "#/components/schemas/ExternalTransaction" }
+              error:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  hint: { type: string }
+                  param: { type: string }
+
+    ReconciliationMatch:
+      type: object
+      required: [external_id, posting_id, account, amount, currency]
+      properties:
+        external_id: { type: string }
+        posting_id: { type: integer, format: int64 }
+        account: { type: string }
+        amount: { type: string }
+        currency: { type: string }
+        posting_value_date: { type: string, format: date-time }
+        external_at: { type: string, format: date-time }
+
+    ReconciliationRun:
+      type: object
+      required: [object, id, source, source_id, status, matched_count, unmatched_count, created_at]
+      properties:
+        object: { type: string, enum: [reconciliation_run] }
+        id: { type: string, format: uuid }
+        source: { type: string }
+        source_id: { type: string, format: uuid }
+        status: { type: string, enum: [running, ready, completed] }
+        external_reference: { type: string, nullable: true }
+        matched_count: { type: integer }
+        unmatched_count: { type: integer }
+        matched:
+          type: array
+          items: { $ref: "#/components/schemas/ReconciliationMatch" }
+        unmatched_external:
+          type: array
+          items: { type: object, additionalProperties: true }
+        unmatched_internal:
+          type: array
+          items: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+
+    Organization:
+      type: object
+      required: [object, id, name, plan, created_at, updated_at]
+      properties:
+        object: { type: string, enum: [organization] }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        plan: { type: string }
+        viewer_role: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Ledger:
+      type: object
+      required: [object, id, name, mode, created_at, updated_at]
+      properties:
+        object: { type: string, enum: [ledger] }
+        id: { type: string, format: uuid }
+        name: { type: string }
+        mode: { type: string, enum: [test, live] }
+        description: { type: string, nullable: true }
+        archived_at: { type: string, format: date-time, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AccountTemplate:
+      type: object
+      required: [object, name, accounting_type, created_at]
+      properties:
+        object: { type: string, enum: [account_template] }
+        name: { type: string, example: accounts_receivable }
+        accounting_type: { type: string, enum: [asset, liability, revenue, expense, equity] }
+        allowed_currencies:
+          type: array
+          items: { type: string }
+        balance_non_negative: { type: boolean }
+        description: { type: string, nullable: true }
+        fund_classification: { type: string, enum: [client_held, operator, neutral], nullable: true }
+        custody_provider: { type: string, nullable: true }
+        custody_external_id: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+
+    PeriodClose:
+      type: object
+      required: [object, id, period_start, period_end, closed_by_label, created_at]
+      properties:
+        object: { type: string, enum: [period_close] }
+        id: { type: string, format: uuid }
+        period_start: { type: string, format: date-time }
+        period_end: { type: string, format: date-time }
+        closed_by_label:
+          type: string
+          description: Who closed it, as you labelled them. Not a Kordio identity.
+          example: controller@acme
+        note: { type: string, nullable: true }
+        reopened_at: { type: string, format: date-time, nullable: true }
+        reopened_by_label: { type: string, nullable: true }
+        trial_balance:
+          allOf:
+            - $ref: "#/components/schemas/TrialBalanceReport"
+          description: The trial balance as it stood at the moment of closing.
+        created_at: { type: string, format: date-time }
+
     Balance:
       allOf:
         - $ref: "#/components/schemas/EnvelopeFields"
@@ -2749,6 +2937,7 @@ paths:
           description: Run executed
           content:
             application/json:
+              schema: { $ref: "#/components/schemas/ReconciliationRun" }
               examples:
                 example:
                   value:
@@ -2775,6 +2964,9 @@ paths:
       responses:
         "200":
           description: Full run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconciliationRun" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /ledger/v1/sources:
@@ -2831,6 +3023,9 @@ paths:
       responses:
         "201":
           description: Source created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Source" }
         "409":
           description: A source with this name already exists
 
@@ -2841,7 +3036,11 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
-        "200": { description: Source }
+        "200":
+          description: Source
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Source" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Sources]
@@ -2851,7 +3050,11 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
-        "200": { description: Updated source }
+        "200":
+          description: Updated source
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Source" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /ledger/v1/sources/{source_id}/external_transactions:
@@ -2907,6 +3110,7 @@ paths:
           description: Per-item ingest result
           content:
             application/json:
+              schema: { $ref: "#/components/schemas/IngestResult" }
               examples:
                 example:
                   value:
@@ -2960,6 +3164,9 @@ paths:
       responses:
         "201":
           description: Run executed (completed) or queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconciliationRun" }
         "409":
           description: A run is already active for this source (`run_in_progress`)
 
@@ -2990,6 +3197,9 @@ paths:
       responses:
         "201":
           description: Source with `inbound_url` and one-time `inbound_secret`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Source" }
     delete:
       tags: [Sources]
       summary: Disable the source's inbound endpoint
@@ -2998,7 +3208,11 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
-        "200": { description: Source with inbound disabled }
+        "200":
+          description: Source with inbound disabled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Source" }
 
   /ledger/v1/inbound/sources/{token}:
     post:
@@ -3056,7 +3270,11 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
-        "200": { description: External transaction }
+        "200":
+          description: External transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExternalTransaction" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /ledger/v1/external_transactions/{id}/matches:
@@ -3092,7 +3310,11 @@ paths:
               properties:
                 reason: { type: string }
       responses:
-        "200": { description: Ignored external transaction }
+        "200":
+          description: Ignored external transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExternalTransaction" }
         "409": { description: Row is matched (`invalid_state`) }
 
   /ledger/v1/external_transactions/{id}/match:
@@ -3121,7 +3343,11 @@ paths:
                   items: { type: integer }
                 note: { type: string }
       responses:
-        "201": { description: External transaction with the new match embedded }
+        "201":
+          description: External transaction with the new match embedded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExternalTransaction" }
         "409": { description: Row is not open (`invalid_state`) }
         "422": { description: Postings do not sum to the external amount }
 
@@ -3146,7 +3372,11 @@ paths:
               properties:
                 reason: { type: string }
       responses:
-        "200": { description: Reopened external transaction }
+        "200":
+          description: Reopened external transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExternalTransaction" }
         "409": { description: Row is not matched (`invalid_state`) }
 
   /ledger/v1/postings:
@@ -3264,6 +3494,7 @@ paths:
           description: Period closed; trial balance snapshotted
           content:
             application/json:
+              schema: { $ref: "#/components/schemas/PeriodClose" }
               examples:
                 example:
                   value:
@@ -3295,6 +3526,9 @@ paths:
       responses:
         "200":
           description: Close (full snapshot embedded)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PeriodClose" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /ledger/v1/period_closes/{id}/reopen:
@@ -3322,6 +3556,9 @@ paths:
       responses:
         "200":
           description: Reopened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PeriodClose" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: Already reopened
@@ -3861,6 +4098,9 @@ paths:
       responses:
         "200":
           description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountTemplate" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /ledger/v1/exports:
@@ -4168,7 +4408,9 @@ paths:
       responses:
         "200":
           description: ok
-          content: { application/json: {} }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ledger" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [Ledgers]
@@ -4189,7 +4431,9 @@ paths:
       responses:
         "200":
           description: Updated
-          content: { application/json: {} }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ledger" }
 
   /ledger/v1/organizations/me:
     get:
@@ -4201,7 +4445,9 @@ paths:
       responses:
         "200":
           description: ok
-          content: { application/json: {} }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
 
 # ===========================================================================
 # Recipes (illustrative only, not part of the platform vocabulary)

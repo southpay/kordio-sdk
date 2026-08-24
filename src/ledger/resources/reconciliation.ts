@@ -5,7 +5,6 @@ import { splitConfig, toRequestOptions } from '../request'
 import type {
   ExternalTransaction,
   ExternalTransactionStatus,
-  InboundEndpoint,
   IngestResult,
   ListParams,
   ReconciliationMatch,
@@ -112,16 +111,16 @@ export class SourcesResource extends Resource {
     )
   }
 
-  async enableInbound(id: string, config?: RequestConfig): Promise<InboundEndpoint> {
-    return await this.unwrap<InboundEndpoint>(
+  async enableInbound(id: string, config?: RequestConfig): Promise<Source> {
+    return await this.unwrap<Source>(
       'POST',
       `/ledger/v1/sources/${encodePathSegment(id)}/inbound`,
       toRequestOptions(config),
     )
   }
 
-  async disableInbound(id: string, config?: RequestConfig): Promise<void> {
-    await this.raw<void>(
+  async disableInbound(id: string, config?: RequestConfig): Promise<Source> {
+    return await this.unwrap<Source>(
       'DELETE',
       `/ledger/v1/sources/${encodePathSegment(id)}/inbound`,
       toRequestOptions(config),

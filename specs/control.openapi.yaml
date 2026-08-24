@@ -1856,11 +1856,15 @@ paths:
           schema:
             type: string
             enum: [live, test]
+        - $ref: '#/components/parameters/QueueSort'
+        - $ref: '#/components/parameters/QueueDirection'
+        - $ref: '#/components/parameters/MinAmountCents'
+        - $ref: '#/components/parameters/HeldBefore'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/StartingAfter'
       responses:
         '200':
-          description: A page of action intents.
+          description: A page of action intents, with a summary of the whole matching set.
           content:
             application/json:
               schema:
@@ -1872,6 +1876,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/ActionIntent'
+                      summary:
+                        $ref: '#/components/schemas/QueueSummary'
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
@@ -2034,11 +2040,15 @@ paths:
           schema:
             type: string
             enum: [live, test]
+        - $ref: '#/components/parameters/QueueSort'
+        - $ref: '#/components/parameters/QueueDirection'
+        - $ref: '#/components/parameters/MinAmountCents'
+        - $ref: '#/components/parameters/HeldBefore'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/StartingAfter'
       responses:
         '200':
-          description: A page of payment intents.
+          description: A page of payment intents, with a summary of the whole matching set.
           content:
             application/json:
               schema:
@@ -2050,6 +2060,8 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/PaymentIntent'
+                      summary:
+                        $ref: '#/components/schemas/QueueSummary'
         '404':
           $ref: '#/components/responses/WorkspaceNotFound'
 
@@ -2959,6 +2971,36 @@ components:
         The `id` of the last record on the previous page. An unknown or foreign id is
         ignored and returns the first page.
       schema: { type: string, format: uuid }
+    QueueSort:
+      name: sort
+      in: query
+      description: >-
+        Order the whole matching set, not just the page. `amount` sorts by the intent's
+        value, `age` by when it was created. An unrecognised value falls back to `age`.
+      schema:
+        type: string
+        enum: [amount, age]
+        default: age
+    QueueDirection:
+      name: direction
+      in: query
+      description: Direction for `sort`. An unrecognised value falls back to `desc`.
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+    MinAmountCents:
+      name: min_amount_cents
+      in: query
+      description: Drop anything worth less than this. Applies to the summary as well as the page.
+      schema: { type: integer, minimum: 0 }
+    HeldBefore:
+      name: held_before
+      in: query
+      description: >-
+        Keep only what was created before this instant, for finding what has been waiting
+        longest. A value that is not ISO 8601 is ignored rather than rejected.
+      schema: { type: string, format: date-time }
 
   responses:
     AgentUnauthorized:
@@ -3080,6 +3122,20 @@ components:
           type: string
           nullable: true
           description: Pass back as `starting_after`.
+
+    QueueSummary:
+      type: object
+      required: [total, total_cents]
+      description: >-
+        Describes everything the filters matched, not the page that was returned, so a
+        caller can show a true queue size without walking every page.
+      properties:
+        total:
+          type: integer
+          description: How many records match, across every page.
+        total_cents:
+          type: integer
+          description: Their combined value in cents.
 
     Decision:
       type: object

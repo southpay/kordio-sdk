@@ -5,6 +5,18 @@ type Schemas = components['schemas']
 
 export type Account = Schemas['Account']
 export type AccountStatement = Schemas['AccountStatement']
+export type Source = Schemas['Source']
+export type ExternalTransaction = Schemas['ExternalTransaction']
+export type IngestResult = Schemas['IngestResult']
+export type ReconciliationRun = Schemas['ReconciliationRun']
+export type ReconciliationMatch = Schemas['ReconciliationMatch']
+export type Organization = Schemas['Organization']
+export type Ledger = Schemas['Ledger']
+export type AccountTemplate = Schemas['AccountTemplate']
+export type PeriodClose = Schemas['PeriodClose']
+export type Capabilities =
+  paths['/ledger/v1/_meta/capabilities']['get']['responses']['200']['content']['application/json']
+export type ReconciliationRunStatus = NonNullable<ReconciliationRun['status']>
 export type StatementBalance = Schemas['StatementBalance']
 export type ReportAccountRow = Schemas['ReportAccountRow']
 export type TrialBalanceReport = Schemas['TrialBalanceReport']
@@ -110,172 +122,6 @@ export interface WirePosting {
   direction: Direction
   pending?: boolean
   tags?: Record<string, string>
-}
-
-export interface Capabilities {
-  object: 'capabilities'
-  api_version: string
-  release: string
-  plan: string
-  features: Record<string, boolean>
-  auth: {
-    scheme: string
-    algorithm: string
-    scopes: string[]
-    grant_types: string[]
-    discovery: string
-  }
-  time: {
-    clock: string
-    value_date_precision: string
-    booking_date_precision: string
-    period_close_enforced_at: string[]
-  }
-  [key: string]: unknown
-}
-
-export interface Organization {
-  object: 'organization'
-  id: string
-  name: string
-  plan: string
-  viewer_role: string | null
-  metadata: Record<string, unknown>
-  created_at: string
-  updated_at: string
-}
-
-export interface Ledger {
-  object: 'ledger'
-  id: string
-  name: string
-  mode: 'test' | 'live'
-  description: string | null
-  metadata: Record<string, unknown>
-  archived_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface AccountTemplate {
-  object: 'account_template'
-  name: string
-  accounting_type: AccountType
-  allowed_currencies: string[]
-  balance_non_negative: boolean
-  description: string | null
-  fund_classification: string | null
-  custody_provider: string | null
-  custody_external_id: string | null
-  metadata: Record<string, unknown>
-  created_at: string
-}
-
-export interface PeriodClose {
-  object: 'period_close'
-  id: string
-  period_start: string
-  period_end: string
-  closed_by_label: string
-  note?: string | null
-  reopened_at?: string | null
-  reopened_by_label?: string | null
-  trial_balance: TrialBalanceReport
-  created_at: string
-}
-
-export interface Source {
-  object: 'source'
-  id: string
-  name: string
-  kind: string
-  description: string | null
-  implicit: boolean
-  default_strategy: ReconciliationStrategy | null
-  default_window_seconds: number | null
-  default_tolerance_minor_units: string | null
-  default_account_id: string | null
-  inbound_enabled: boolean
-  inbound_url: string | null
-  sync_enabled: boolean
-  sync_status: string
-  sync_error: string | null
-  connected_ref: string | null
-  last_synced_at: string | null
-  metadata: Record<string, unknown>
-  created_at: string
-  updated_at: string
-}
-
-export interface IngestResult {
-  object: 'ingest_result'
-  source_id: string
-  created_count: number
-  replayed_count: number
-  error_count: number
-  results: {
-    external_id: string
-    status: 'created' | 'replayed' | 'error'
-    external_transaction?: ExternalTransaction
-    error?: { code: string; message: string; hint?: string; param?: string }
-  }[]
-}
-
-export interface InboundEndpoint {
-  object: 'inbound_endpoint'
-  source_id: string
-  token: string
-  url: string
-  secret?: string
-  enabled: boolean
-}
-
-export interface ReconciliationMatch {
-  external_id: string
-  posting_id: number
-  account: string
-  amount: string
-  currency: string
-  posting_value_date: string
-  external_at: string
-}
-
-export type ReconciliationRunStatus = 'running' | 'ready' | 'completed'
-
-export interface ReconciliationRun {
-  object: 'reconciliation_run'
-  id: string
-  source: string
-  source_id: string
-  status: ReconciliationRunStatus
-  external_reference: string | null
-  matched_count: number
-  unmatched_count: number
-  matched: ReconciliationMatch[]
-  unmatched_external: unknown[]
-  unmatched_internal: unknown[]
-  created_at: string
-}
-
-export interface ExternalTransaction {
-  object: 'external_transaction'
-  id: string
-  source_id: string
-  external_id: string
-  amount: string
-  currency: string
-  status: ExternalTransactionStatus
-  account_id: string | null
-  occurred_at: string | null
-  matched_at: string | null
-  ignored_reason: string | null
-  reconciliation_run_id: string | null
-  reconciliation_match_id: string | null
-  reference_rail: string | null
-  reference_kind: string | null
-  reference_value: string | null
-  raw: Record<string, unknown>
-  created_at: string
 }
 
 export interface ListParams extends RequestConfig {

@@ -1756,6 +1756,13 @@ export interface components {
              */
             status?: "active" | "disabled";
         } & components["schemas"]["PolicyDraft"];
+        /** @description Describes everything the filters matched, not the page that was returned, so a caller can show a true queue size without walking every page. */
+        QueueSummary: {
+            /** @description How many records match, across every page. */
+            total: number;
+            /** @description Their combined value in cents. */
+            total_cents: number;
+        };
         /**
          * @description `owner` carries read, approve, manage_policy and manage_members. `admin` carries read, approve and manage_policy. `member` carries read.
          * @default member
@@ -1923,13 +1930,21 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Keep only what was created before this instant, for finding what has been waiting longest. A value that is not ISO 8601 is ignored rather than rejected. */
+        HeldBefore: string;
         /** @description Unique per action, scoped to the agent. A replay returns the original intent and the original decision, at the original status, rather than reserving budget twice. */
         IdempotencyKeyRequired: string;
         /** @description Page size. Defaults to 50, clamped to 1..200. */
         Limit: number;
+        /** @description Drop anything worth less than this. Applies to the summary as well as the page. */
+        MinAmountCents: number;
         PathId: string;
         /** @example vendor-allowlist */
         PolicyModuleName: string;
+        /** @description Direction for `sort`. An unrecognised value falls back to `desc`. */
+        QueueDirection: "asc" | "desc";
+        /** @description Order the whole matching set, not just the page. `amount` sorts by the intent's value, `age` by when it was created. An unrecognised value falls back to `age`. */
+        QueueSort: "amount" | "age";
         /** @description The `id` of the last record on the previous page. An unknown or foreign id is ignored and returns the first page. */
         StartingAfter: string;
         /** @example acme-procurement */
@@ -2979,8 +2994,16 @@ export interface operations {
                 /** @description Narrow to intents whose agent runs in this mode. Any other value is a `400`, rather than a silent full listing. */
                 agent_mode?: "live" | "test";
                 budget_id?: string;
+                /** @description Direction for `sort`. An unrecognised value falls back to `desc`. */
+                direction?: components["parameters"]["QueueDirection"];
+                /** @description Keep only what was created before this instant, for finding what has been waiting longest. A value that is not ISO 8601 is ignored rather than rejected. */
+                held_before?: components["parameters"]["HeldBefore"];
                 /** @description Page size. Defaults to 50, clamped to 1..200. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Drop anything worth less than this. Applies to the summary as well as the page. */
+                min_amount_cents?: components["parameters"]["MinAmountCents"];
+                /** @description Order the whole matching set, not just the page. `amount` sorts by the intent's value, `age` by when it was created. An unrecognised value falls back to `age`. */
+                sort?: components["parameters"]["QueueSort"];
                 /** @description The `id` of the last record on the previous page. An unknown or foreign id is ignored and returns the first page. */
                 starting_after?: components["parameters"]["StartingAfter"];
                 state?: "pending" | "requires_approval" | "completed" | "failed" | "denied";
@@ -2994,7 +3017,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A page of action intents. */
+            /** @description A page of action intents, with a summary of the whole matching set. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3002,6 +3025,7 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ListEnvelope"] & {
                         data?: components["schemas"]["ActionIntent"][];
+                        summary?: components["schemas"]["QueueSummary"];
                     };
                 };
             };
@@ -3942,8 +3966,16 @@ export interface operations {
                 /** @description Narrow to intents whose agent runs in this mode. Any other value is a `400`, rather than a silent full listing. */
                 agent_mode?: "live" | "test";
                 budget_id?: string;
+                /** @description Direction for `sort`. An unrecognised value falls back to `desc`. */
+                direction?: components["parameters"]["QueueDirection"];
+                /** @description Keep only what was created before this instant, for finding what has been waiting longest. A value that is not ISO 8601 is ignored rather than rejected. */
+                held_before?: components["parameters"]["HeldBefore"];
                 /** @description Page size. Defaults to 50, clamped to 1..200. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Drop anything worth less than this. Applies to the summary as well as the page. */
+                min_amount_cents?: components["parameters"]["MinAmountCents"];
+                /** @description Order the whole matching set, not just the page. `amount` sorts by the intent's value, `age` by when it was created. An unrecognised value falls back to `age`. */
+                sort?: components["parameters"]["QueueSort"];
                 /** @description The `id` of the last record on the previous page. An unknown or foreign id is ignored and returns the first page. */
                 starting_after?: components["parameters"]["StartingAfter"];
                 state?: "pending" | "requires_approval" | "executed" | "failed" | "denied";
@@ -3957,7 +3989,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A page of payment intents. */
+            /** @description A page of payment intents, with a summary of the whole matching set. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3965,6 +3997,7 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ListEnvelope"] & {
                         data?: components["schemas"]["PaymentIntent"][];
+                        summary?: components["schemas"]["QueueSummary"];
                     };
                 };
             };

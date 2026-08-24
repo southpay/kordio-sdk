@@ -387,7 +387,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["AccountTemplate"];
+                    };
                 };
                 404: components["responses"]["NotFound"];
             };
@@ -1070,7 +1072,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ExternalTransaction"];
+                    };
                 };
                 404: components["responses"]["NotFound"];
             };
@@ -1121,7 +1125,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ExternalTransaction"];
+                    };
                 };
                 /** @description Row is matched (`invalid_state`) */
                 409: {
@@ -1177,7 +1183,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ExternalTransaction"];
+                    };
                 };
                 /** @description Row is not open (`invalid_state`) */
                 409: {
@@ -1277,7 +1285,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ExternalTransaction"];
+                    };
                 };
                 /** @description Row is not matched (`invalid_state`) */
                 409: {
@@ -1456,7 +1466,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["Ledger"];
                     };
                 };
                 404: components["responses"]["NotFound"];
@@ -1494,7 +1504,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["Ledger"];
                     };
                 };
             };
@@ -1755,7 +1765,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["Organization"];
                     };
                 };
             };
@@ -1838,7 +1848,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["PeriodClose"];
                     };
                 };
                 /** @description Overlapping close already exists */
@@ -1882,7 +1892,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PeriodClose"];
+                    };
                 };
                 404: components["responses"]["NotFound"];
             };
@@ -1934,7 +1946,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PeriodClose"];
+                    };
                 };
                 404: components["responses"]["NotFound"];
                 /** @description Already reopened */
@@ -2208,7 +2222,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["ReconciliationRun"];
                     };
                 };
             };
@@ -2243,7 +2257,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationRun"];
+                    };
                 };
                 404: components["responses"]["NotFound"];
             };
@@ -2843,7 +2859,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Source"];
+                    };
                 };
                 /** @description A source with this name already exists */
                 409: {
@@ -2884,7 +2902,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Source"];
+                    };
                 };
                 404: components["responses"]["NotFound"];
             };
@@ -2911,7 +2931,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Source"];
+                    };
                 };
                 404: components["responses"]["NotFound"];
             };
@@ -2961,7 +2983,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Source"];
+                    };
                 };
             };
         };
@@ -2982,7 +3006,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Source"];
+                    };
                 };
             };
         };
@@ -3056,7 +3082,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["IngestResult"];
                     };
                 };
             };
@@ -3122,7 +3148,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationRun"];
+                    };
                 };
                 /** @description A run is already active for this source (`run_in_progress`) */
                 409: {
@@ -4663,6 +4691,26 @@ export interface components {
             /** @description True when the period held more entries than `limit` returned. */
             truncated: boolean;
         };
+        AccountTemplate: {
+            /** @enum {string} */
+            accounting_type: "asset" | "liability" | "revenue" | "expense" | "equity";
+            allowed_currencies?: string[];
+            balance_non_negative?: boolean;
+            /** Format: date-time */
+            created_at: string;
+            custody_external_id?: string | null;
+            custody_provider?: string | null;
+            description?: string | null;
+            /** @enum {string|null} */
+            fund_classification?: "client_held" | "operator" | "neutral" | null;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @example accounts_receivable */
+            name: string;
+            /** @enum {string} */
+            object: "account_template";
+        };
         AnonymizationRequest: {
             /**
              * @description Must equal the literal string `ANONYMIZE`.
@@ -4892,6 +4940,38 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
+        ExternalTransaction: {
+            account_id?: string | null;
+            amount: string;
+            /** Format: date-time */
+            created_at: string;
+            currency: string;
+            /** @description The identifier the source gave this movement. Unique per source. */
+            external_id: string;
+            /** Format: uuid */
+            id: string;
+            ignored_reason?: string | null;
+            /** Format: date-time */
+            matched_at?: string | null;
+            /** @enum {string} */
+            object: "external_transaction";
+            /** Format: date-time */
+            occurred_at?: string | null;
+            raw?: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            reconciliation_match_id?: string | null;
+            /** Format: uuid */
+            reconciliation_run_id?: string | null;
+            reference_kind?: string | null;
+            reference_rail?: string | null;
+            reference_value?: string | null;
+            /** Format: uuid */
+            source_id: string;
+            /** @enum {string} */
+            status: "open" | "matched" | "ignored";
+        };
         FundSegregationReport: components["schemas"]["EnvelopeFields"] & {
             by_currency: {
                 /**
@@ -4951,6 +5031,46 @@ export interface components {
             /** @enum {string} */
             object: "income_statement";
             period: components["schemas"]["ReportPeriod"];
+        };
+        IngestResult: {
+            created_count: number;
+            error_count: number;
+            /** @enum {string} */
+            object: "ingest_result";
+            replayed_count: number;
+            results: {
+                error?: {
+                    code?: string;
+                    hint?: string;
+                    message?: string;
+                    param?: string;
+                };
+                external_id: string;
+                external_transaction?: components["schemas"]["ExternalTransaction"];
+                /** @enum {string} */
+                status: "created" | "replayed" | "error";
+            }[];
+            /** Format: uuid */
+            source_id: string;
+        };
+        Ledger: {
+            /** Format: date-time */
+            archived_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            description?: string | null;
+            /** Format: uuid */
+            id: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            mode: "test" | "live";
+            name: string;
+            /** @enum {string} */
+            object: "ledger";
+            /** Format: date-time */
+            updated_at: string;
         };
         List: components["schemas"]["ListEnvelope"];
         ListEnvelope: {
@@ -5021,6 +5141,45 @@ export interface components {
             error_description?: string;
             error_uri?: string;
             hint?: string;
+        };
+        Organization: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            name: string;
+            /** @enum {string} */
+            object: "organization";
+            plan: string;
+            /** Format: date-time */
+            updated_at: string;
+            viewer_role?: string | null;
+        };
+        PeriodClose: {
+            /**
+             * @description Who closed it, as you labelled them. Not a Kordio identity.
+             * @example controller@acme
+             */
+            closed_by_label: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            note?: string | null;
+            /** @enum {string} */
+            object: "period_close";
+            /** Format: date-time */
+            period_end: string;
+            /** Format: date-time */
+            period_start: string;
+            /** Format: date-time */
+            reopened_at?: string | null;
+            reopened_by_label?: string | null;
+            /** @description The trial balance as it stood at the moment of closing. */
+            trial_balance?: components["schemas"]["TrialBalanceReport"];
         };
         Posting: {
             /** @description A string id by default; an Account object when `?expand=postings.account`. */
@@ -5098,6 +5257,41 @@ export interface components {
             tags?: {
                 [key: string]: string;
             };
+        };
+        ReconciliationMatch: {
+            account: string;
+            amount: string;
+            currency: string;
+            /** Format: date-time */
+            external_at?: string;
+            external_id: string;
+            /** Format: int64 */
+            posting_id: number;
+            /** Format: date-time */
+            posting_value_date?: string;
+        };
+        ReconciliationRun: {
+            /** Format: date-time */
+            created_at: string;
+            external_reference?: string | null;
+            /** Format: uuid */
+            id: string;
+            matched?: components["schemas"]["ReconciliationMatch"][];
+            matched_count: number;
+            /** @enum {string} */
+            object: "reconciliation_run";
+            source: string;
+            /** Format: uuid */
+            source_id: string;
+            /** @enum {string} */
+            status: "running" | "ready" | "completed";
+            unmatched_count: number;
+            unmatched_external?: {
+                [key: string]: unknown;
+            }[];
+            unmatched_internal?: {
+                [key: string]: unknown;
+            }[];
         };
         ReportAccountRow: {
             account: string;
@@ -5226,6 +5420,45 @@ export interface components {
              * @example merchant_payable
              */
             template: string;
+        };
+        Source: {
+            connected_ref?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            default_account_id?: string | null;
+            /** @enum {string|null} */
+            default_strategy?: "exact" | "sum_in_window" | null;
+            default_tolerance_minor_units?: string | null;
+            default_window_seconds?: number | null;
+            description?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @description True for sources the platform created on your behalf. */
+            implicit?: boolean;
+            inbound_enabled?: boolean;
+            /** @description Returned only when inbound is enabled or the secret is rotated. Never returned again. */
+            inbound_secret?: string;
+            /** @description Present once inbound is enabled. Post signed payloads here. */
+            inbound_url?: string | null;
+            /**
+             * @description Connector kind. Selects the inbound payload adapter.
+             * @default custom
+             */
+            kind: string;
+            /** Format: date-time */
+            last_synced_at?: string | null;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @example cobo */
+            name: string;
+            /** @enum {string} */
+            object: "source";
+            sync_enabled?: boolean;
+            sync_error?: string | null;
+            sync_status?: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         StatementBalance: {
             currency: string;
