@@ -33,6 +33,5 @@ jobs:
             echo "tag $tag does not match package version $pkg" >&2
             exit 1
           fi
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish via npm trusted publishing (OIDC, no stored credential)
+        run: npm publish --provenance --access public
