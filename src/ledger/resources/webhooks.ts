@@ -3,9 +3,11 @@ import { encodePathSegment, Resource } from '../../core/resource'
 import { splitConfig, toRequestOptions } from '../request'
 import type {
   IdempotentRequestConfig,
+  LedgerEventType,
   ListParams,
   RequestConfig,
   WebhookDelivery,
+  WebhookDeliveryStatus,
   WebhookEndpoint,
   WebhookEndpointInput,
 } from '../types'
@@ -13,12 +15,12 @@ import type {
 export interface WebhookEndpointUpdateParams extends RequestConfig {
   url?: string
   description?: string
-  enabled_events?: readonly string[]
+  enabled_events?: readonly LedgerEventType[]
   active?: boolean
 }
 
 export interface DeliveryListParams extends ListParams {
-  status?: string
+  status?: WebhookDeliveryStatus
 }
 
 export class WebhookEndpointsResource extends Resource {
@@ -99,7 +101,10 @@ export class WebhookEndpointsResource extends Resource {
 
   async testSend(
     id: string,
-    params: IdempotentRequestConfig & { eventType?: string; payload?: Record<string, unknown> },
+    params: IdempotentRequestConfig & {
+      eventType?: LedgerEventType
+      payload?: Record<string, unknown>
+    },
   ): Promise<WebhookDelivery> {
     const body = { event_type: params.eventType, payload: params.payload }
     return await this.unwrap<WebhookDelivery>(

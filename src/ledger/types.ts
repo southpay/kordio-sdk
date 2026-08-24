@@ -25,6 +25,41 @@ export type ReservesOutstandingReport = Schemas['ReservesOutstandingReport']
 export type FundSegregationReport = Schemas['FundSegregationReport']
 export type LedgerErrorCode = NonNullable<Schemas['ErrorResponse']['error']['code']>
 
+export type LedgerMode = 'test' | 'live'
+export type OverdraftPolicy = 'allowed' | 'none'
+export type FundClassification = 'client_held' | 'operator' | 'neutral'
+export type AccountKind = 'standard' | 'reserve'
+
+export type ReconciliationStrategy = 'exact' | 'sum_in_window'
+export type ExternalTransactionStatus = 'open' | 'matched' | 'ignored'
+export type WebhookDeliveryStatus = 'pending' | 'succeeded' | 'failed'
+
+export type ExportResource =
+  | 'accounts'
+  | 'transactions'
+  | 'postings'
+  | 'events'
+  | 'period_closes'
+  | 'reconciliation_runs'
+  | 'webhook_endpoints'
+export type ExportFormat = 'ndjson'
+
+export type KnownLedgerEventType =
+  | 'account.created'
+  | 'account.classification_changed'
+  | 'transaction.created'
+  | 'transaction.committed'
+  | 'transaction.updated'
+  | 'transaction.reversed'
+  | 'transaction.reversal_created'
+  | 'transaction.refund_created'
+  | 'reserve.swept'
+  | 'reserve.released'
+  | 'reserve.clawed'
+  | 'webhook_endpoint.secret_rotated'
+
+export type LedgerEventType = KnownLedgerEventType | (string & {})
+
 export type Query<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends {
   parameters: { query?: infer Q }
 }
@@ -259,7 +294,7 @@ export interface Source {
   kind: string
   description: string | null
   implicit: boolean
-  default_strategy: string | null
+  default_strategy: ReconciliationStrategy | null
   default_window_seconds: number | null
   default_tolerance_minor_units: string | null
   default_account_id: string | null
@@ -308,12 +343,14 @@ export interface ReconciliationMatch {
   external_at: string
 }
 
+export type ReconciliationRunStatus = 'running' | 'ready' | 'completed'
+
 export interface ReconciliationRun {
   object: 'reconciliation_run'
   id: string
   source: string
   source_id: string
-  status: string
+  status: ReconciliationRunStatus
   external_reference: string | null
   matched_count: number
   unmatched_count: number
@@ -330,7 +367,7 @@ export interface ExternalTransaction {
   external_id: string
   amount: string
   currency: string
-  status: 'open' | 'matched' | 'ignored' | string
+  status: ExternalTransactionStatus
   account_id: string | null
   occurred_at: string | null
   matched_at: string | null

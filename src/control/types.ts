@@ -29,15 +29,26 @@ export type ControlErrorCode = NonNullable<Schemas['Error']['error']['code']>
 
 export type Outcome = 'allowed' | 'requires_approval' | 'denied'
 
+export type AgentMode = 'test' | 'live'
+export type AgentStatus = 'active' | 'suspended' | 'revoked'
+export type BudgetStatus = 'active' | 'exhausted' | 'closed'
+export type SpendTokenStatus = 'issued' | 'consumed' | 'expired' | 'void'
+export type ActionIntentState = 'pending' | 'requires_approval' | 'completed' | 'failed' | 'denied'
+export type PaymentIntentState = 'pending' | 'requires_approval' | 'executed' | 'failed' | 'denied'
+export type IntentState = ActionIntentState | PaymentIntentState
+export type PolicyMode = 'blocklist' | 'allowlist'
+export type BillingPlan = 'sandbox' | 'build' | 'growth' | 'scale' | 'enterprise'
+export type WebhookEndpointStatus = 'active' | 'disabled'
+
 export interface CheckoutStarted {
   checkout_url: string
   checkout_id: string
-  plan: string
+  plan: BillingPlan
 }
 
 export interface PlanChanged {
   plan_changed: boolean
-  plan: string
+  plan: BillingPlan
 }
 
 export type CheckoutResult = CheckoutStarted | PlanChanged

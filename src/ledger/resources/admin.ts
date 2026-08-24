@@ -3,9 +3,14 @@ import { encodePathSegment, Resource } from '../../core/resource'
 import { splitConfig, toRequestOptions } from '../request'
 import type {
   AccountTemplate,
+  AccountType,
   Export,
+  ExportFormat,
+  ExportResource,
+  FundClassification,
   IdempotentRequestConfig,
   Ledger,
+  LedgerMode,
   ListParams,
   OAuthClient,
   OAuthClientInput,
@@ -23,19 +28,19 @@ export interface PeriodCloseInput extends RequestConfig {
 
 export interface AccountTemplateInput extends RequestConfig {
   name: string
-  accounting_type: string
+  accounting_type: AccountType
   allowed_currencies?: readonly string[]
   balance_non_negative?: boolean
   description?: string
   metadata?: Record<string, unknown>
-  fund_classification?: string
+  fund_classification?: FundClassification
   custody_provider?: string
   custody_external_id?: string
 }
 
 export interface LedgerInput extends RequestConfig {
   name: string
-  mode: 'test' | 'live'
+  mode: LedgerMode
   metadata?: Record<string, unknown>
 }
 
@@ -109,8 +114,8 @@ export class AccountTemplatesResource extends Resource {
 export class ExportsResource extends Resource {
   async create(
     params: IdempotentRequestConfig & {
-      resources?: readonly string[]
-      format?: string
+      resources?: readonly ExportResource[]
+      format?: ExportFormat
     },
   ): Promise<Export> {
     const body = { resources: params.resources, format: params.format }

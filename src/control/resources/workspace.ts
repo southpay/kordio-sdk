@@ -6,15 +6,19 @@ import { toRequestOptions } from '../request'
 import type {
   ActionIntent,
   Agent,
+  AgentMode,
+  AgentStatus,
   ApprovalImpact,
   AuditEvent,
   BillingOverview,
+  BillingPlan,
   BillingPortal,
   Budget,
   CheckoutResult,
   ControlWebhookEndpoint,
   Decision,
   Funds,
+  IntentState,
   Invitation,
   ListParams,
   Membership,
@@ -26,6 +30,8 @@ import type {
   RequestConfig,
   Role,
   SpendToken,
+  WebhookEndpointStatus,
+  WebhookEventType,
   Workspace,
   WorkspaceExport,
 } from '../types'
@@ -57,8 +63,8 @@ export class AgentsResource extends ScopedResource {
   async create(
     params: RequestConfig & {
       name: string
-      mode?: 'test' | 'live'
-      status?: string
+      mode?: AgentMode
+      status?: AgentStatus
       scopes?: readonly string[]
     },
   ): Promise<Agent> {
@@ -94,7 +100,11 @@ export class AgentsResource extends ScopedResource {
 
   async update(
     id: string,
-    params: RequestConfig & { name?: string; status?: string; scopes?: readonly string[] },
+    params: RequestConfig & {
+      name?: string
+      status?: AgentStatus
+      scopes?: readonly string[]
+    },
   ): Promise<Agent> {
     const body = compact({ name: params.name, status: params.status, scopes: params.scopes })
     return await this.unwrap<Agent>(
@@ -233,9 +243,9 @@ export class PolicyModulesResource extends ScopedResource {
 export interface IntentListParams extends ListParams {
   agentId?: string
   budgetId?: string
-  state?: string
+  state?: IntentState
   actionType?: string
-  agentMode?: 'test' | 'live'
+  agentMode?: AgentMode
 }
 
 class ApprovalQueue<T> extends ScopedResource {
@@ -379,8 +389,8 @@ export class ControlWebhookEndpointsResource extends ScopedResource {
   async create(
     params: RequestConfig & {
       url: string
-      status?: string
-      enabledEvents?: readonly string[]
+      status?: WebhookEndpointStatus
+      enabledEvents?: readonly WebhookEventType[]
     },
   ): Promise<ControlWebhookEndpoint> {
     const body = compact({
@@ -509,7 +519,7 @@ export class BillingResource extends ScopedResource {
   }
 
   async checkout(
-    params: RequestConfig & { plan: string; email?: string },
+    params: RequestConfig & { plan: BillingPlan; email?: string },
   ): Promise<CheckoutResult> {
     const body = compact({ plan: params.plan, email: params.email })
     return await this.unwrap<CheckoutResult>(

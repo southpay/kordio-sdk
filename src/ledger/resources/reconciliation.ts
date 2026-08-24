@@ -4,11 +4,13 @@ import { encodePathSegment, Resource } from '../../core/resource'
 import { splitConfig, toRequestOptions } from '../request'
 import type {
   ExternalTransaction,
+  ExternalTransactionStatus,
   InboundEndpoint,
   IngestResult,
   ListParams,
   ReconciliationMatch,
   ReconciliationRun,
+  ReconciliationStrategy,
   RequestConfig,
   Source,
 } from '../types'
@@ -16,9 +18,9 @@ import type {
 export interface SourceInput {
   name: string
   kind?: string
-  default_strategy?: string
+  default_strategy?: ReconciliationStrategy
   default_window_seconds?: number
-  default_tolerance_minor_units?: number
+  default_tolerance_minor_units?: string | number
   default_account_id?: string
   description?: string
   metadata?: Record<string, unknown>
@@ -39,15 +41,15 @@ export interface ExternalTransactionItem {
 export interface RunInput {
   from?: Date | string
   to?: Date | string
-  strategy?: string
+  strategy?: ReconciliationStrategy
   window_seconds?: number
-  auto_resolve_below_minor_units?: number
+  auto_resolve_below_minor_units?: string | number
   external_reference?: string
   note?: string
 }
 
 export interface ExternalTransactionListParams extends ListParams {
-  status?: string
+  status?: ExternalTransactionStatus
   sourceId?: string
   currency?: string
   from?: Date | string

@@ -119,4 +119,10 @@ Worth fixing in `docs-kordio`, currently worked around here:
 
 ## Examples are compile-checked
 
-`examples/usage.ts` mirrors every snippet in the README and is included in `tsconfig.json`, so `bun run typecheck` fails if a README example stops compiling. It caught a `within_policy` field that does not exist on `ApprovalImpact` before the first commit. When you change the README, change the example with it.
+Everything in `examples/` is included in `tsconfig.json`, so `bun run typecheck` fails if an example stops compiling. That has already caught two real defects: a `within_policy` field that does not exist on `ApprovalImpact`, and a `strategy: 'amount_and_time'` that the reconciliation endpoint would have rejected at runtime. Examples import through the `@kordio/sdk` path alias so they read exactly as a user's code would. When you change the README, change the examples with it.
+
+## Spec enums belong in the type system
+
+Where the spec declares a string enum, the SDK surfaces a union rather than `string`: `ReconciliationStrategy`, `ExportResource`, `ExternalTransactionStatus`, `WebhookDeliveryStatus`, `AgentStatus`, `IntentState`, `BillingPlan` and the rest. `test/types.test.ts` pins them with `@ts-expect-error` assertions, so loosening one back to `string` fails the build rather than silently removing a guard rail.
+
+Two deliberate exceptions. Genuinely open sets stay open: source `kind` has a documented default and no enum, and ledger event types use `KnownLedgerEventType | (string & {})` so editors autocomplete the known ones without rejecting an event the API adds later. Do not turn those into closed unions.

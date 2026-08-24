@@ -5,15 +5,16 @@ const agent = new KordioAgent({
   baseUrl: process.env.KORDIO_BASE_URL,
 })
 
-interface Quote {
+export interface Quote {
   vendor: string
   cents: number
+  leadTimeDays: number
 }
 
-export async function procure(quotes: Quote[], runId: string) {
+export async function chooseAndPay(quotes: Quote[], runId: string) {
   const budget = await agent.budgets.create({ budgetCents: 200_000, currency: 'USD' })
 
-  const affordable: Quote[] = []
+  const viable: Quote[] = []
 
   for (const quote of quotes) {
     const preview = await agent.actions.simulate({
@@ -23,12 +24,13 @@ export async function procure(quotes: Quote[], runId: string) {
       costCents: quote.cents,
     })
 
-    if (preview.outcome === 'allowed') affordable.push(quote)
-    else console.log(`skipping ${quote.vendor}: ${preview.outcome} (${preview.rule})`)
+    if (preview.outcome === 'allowed') viable.push(quote)
   }
 
-  affordable.sort((a, b) => a.cents - b.cents)
-  const chosen = affordable[0]
+  if (viable.length === 0) return null
+
+  viable.sort((a, b) => a.cents - b.cents || a.leadTimeDays - b.leadTimeDays)
+  const chosen = viable[0]
   if (!chosen) return null
 
   const token = await agent.spendTokens.create({
@@ -43,27 +45,23 @@ export async function procure(quotes: Quote[], runId: string) {
     amountCents: chosen.cents,
     counterparty: chosen.vendor,
     spendTokenId: token.id,
-    idempotencyKey: `procure-${runId}`,
-    metadata: { run_id: runId },
+    idempotencyKey: `procure:${runId}`,
+    metadata: { run_id: runId, lead_time_days: chosen.leadTimeDays },
   })
 
   if (payment.outcome !== 'allowed') {
-    console.log(`payment ${payment.outcome} by ${payment.rule}`)
-    return null
+    return { held: payment.outcome, rule: payment.rule, vendor: chosen.vendor }
   }
 
-  const receipt = await payOnChain(chosen, payment.cosignature)
-
-  if (!receipt) {
-    await agent.paymentIntents.fail(payment.intent.id ?? '', { reason: 'rail declined' })
-    return null
+  return {
+    intentId: payment.intent.id,
+    vendor: chosen.vendor,
+    cents: chosen.cents,
+    authorization: payment.cosignature,
   }
-
-  await agent.paymentIntents.complete(payment.intent.id ?? '')
-  return receipt
 }
 
-export async function verifyBeforeSettling(authorization: string) {
+export async function settle(authorization: string, moveMoney: (cents: number) => Promise<string>) {
   const cosign = new KordioCosign({ baseUrl: process.env.KORDIO_BASE_URL })
   const check = await cosign.consume({ authorization, consumedBy: 'settlement-worker' })
 
@@ -71,13 +69,13 @@ export async function verifyBeforeSettling(authorization: string) {
     throw new Error(`refusing to move money: ${check.reason}`)
   }
 
-  return {
-    intentId: check.intent_id,
-    amountCents: check.amount_cents,
-    counterparty: check.resource,
-  }
+  const reference = await moveMoney(check.amount_cents ?? 0)
+
+  await agent.paymentIntents.complete(check.intent_id ?? '')
+
+  return { intentId: check.intent_id, reference }
 }
 
-async function payOnChain(_quote: Quote, _cosignature: string | null) {
-  return { txHash: '0xdeadbeef' }
+export async function abandon(intentId: string, reason: string) {
+  return await agent.paymentIntents.fail(intentId, { reason })
 }
