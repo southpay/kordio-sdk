@@ -20,8 +20,18 @@ jobs:
           bun-version: 1.3.8
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+      - name: Trusted publishing needs npm 11.5.1 or later
+        run: |
+          npm install -g npm@latest
+          version="$(npm --version)"
+          echo "npm $version"
+          major="${version%%.*}"
+          if [ "$major" -lt 11 ]; then
+            echo "npm $version is too old for OIDC trusted publishing; need 11.5.1+" >&2
+            exit 1
+          fi
       - run: bun install --frozen-lockfile
       - run: bun run verify
       - name: Tag matches package version

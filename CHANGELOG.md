@@ -3,7 +3,13 @@
 All notable changes to this package are documented here. This project follows
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.1
+
+No functional change. Republished so the tarball carries a provenance
+attestation, which 0.1.0 could not have: the first publish had to be done by
+hand, and provenance requires an OIDC token only CI can mint.
+
+## 0.1.0
 
 Initial release. Covers all 155 operations across the Kordio ledger and spend
 control APIs.
