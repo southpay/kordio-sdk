@@ -298,7 +298,7 @@ It creates throwaway accounts, writes and reverses a transaction, ingests extern
 
 Issues and pull requests are welcome. [CONTRIBUTING.md](./CONTRIBUTING.md) has
 the setup, and `bun run verify` is the whole gate. Security reports go to
-security@kordio.io rather than the issue tracker; see
+tech@southpay.io rather than the issue tracker; see
 [SECURITY.md](./SECURITY.md).
 
 MIT licensed.

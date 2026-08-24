@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Email security@kordio.io. Do not open a public issue for anything that could be
+Email tech@southpay.io. Do not open a public issue for anything that could be
 used against a live ledger or a production agent.
 
 Include what you found, how to reproduce it, and what an attacker could do with
@@ -12,7 +12,7 @@ issue is closed. If you would like credit in the release notes, say so.
 ## Scope
 
 This repository is a client library. Vulnerabilities in the Kordio APIs
-themselves also go to security@kordio.io, but say which one you mean.
+themselves also go to tech@southpay.io, but say which one you mean.
 
 Things we consider security issues in this SDK:
 

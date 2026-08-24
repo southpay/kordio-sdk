@@ -17,7 +17,7 @@ discussions, or publishing someone's private information.
 
 ## Reporting
 
-Email conduct@kordio.io. Reports go to the maintainers and stay confidential.
+Email tech@southpay.io. Reports go to the maintainers and stay confidential.
 We will respond within five business days.
 
 Maintainers may edit, hide, or delete contributions that violate this document,
