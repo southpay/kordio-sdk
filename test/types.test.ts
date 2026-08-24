@@ -59,3 +59,11 @@ test('ledger event types autocomplete but stay open for new events', () => {
   const future: LedgerEventType = 'something.not.invented.yet'
   expect([known, future]).toHaveLength(2)
 })
+
+test('the user agent reports the version we actually publish', async () => {
+  const pkg = await Bun.file(`${import.meta.dir}/../package.json`).json()
+  const http = await Bun.file(`${import.meta.dir}/../src/core/http.ts`).text()
+  const declared = /const SDK_VERSION = '([^']+)'/.exec(http)?.[1]
+
+  expect(declared).toBe(pkg.version)
+})

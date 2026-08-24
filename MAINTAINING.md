@@ -102,7 +102,7 @@ npm publish --access public
 git push --follow-tags
 ```
 
-Bump `SDK_VERSION` in `src/core/http.ts` alongside the package version. It is the `User-Agent` the API sees, which is how a bad release gets identified in server logs.
+`SDK_VERSION` in `src/core/http.ts` is the `User-Agent` the API sees, which is how a bad release gets identified in server logs. A test asserts it matches `package.json`, because relying on a runbook line to remember it did not work: 0.2.0 shipped announcing itself as 0.1.0.
 
 ## Adding another language
 
