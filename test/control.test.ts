@@ -116,6 +116,24 @@ describe('actions.authorize', () => {
       idempotencyKey: 'k',
     })
     expect(() => assertAllowed(result)).toThrow(KordioDeniedError)
+    expect(() => assertAllowed(result)).toThrow('denied by per_transaction_cap')
+  })
+
+  test('the thrown message names the rule, or says nothing when there is none', async () => {
+    const withoutRule = {
+      status: 403,
+      body: {
+        data: { id: 'ai_9' },
+        decision: { outcome: 'denied', rule: null, detail: {}, headroom: {} },
+      },
+    }
+    const server = mockFetch([withoutRule])
+    const result = await agent(server).actions.authorize({
+      budgetId: 'b_1',
+      actionType: 'payment.create',
+      idempotencyKey: 'k',
+    })
+    expect(() => assertAllowed(result)).toThrow(/^denied$/)
   })
 
   test('a real 401 still throws rather than pretending to be a decision', async () => {

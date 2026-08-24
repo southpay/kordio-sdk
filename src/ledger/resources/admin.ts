@@ -49,14 +49,14 @@ export class PeriodClosesResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<PeriodClose>(
       'POST',
-      '/v1/period_closes',
+      '/api/v1/period_closes',
       toRequestOptions(config, { body }),
     )
   }
 
   async list(params: ListParams & { includeReopened?: boolean } = {}): Promise<Page<PeriodClose>> {
     return await this.page<PeriodClose>(
-      '/v1/period_closes',
+      '/api/v1/period_closes',
       { include_reopened: params.includeReopened },
       'cursor',
       toRequestOptions(params),
@@ -66,7 +66,7 @@ export class PeriodClosesResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<PeriodClose> {
     return await this.unwrap<PeriodClose>(
       'GET',
-      `/v1/period_closes/${encodePathSegment(id)}`,
+      `/api/v1/period_closes/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -77,7 +77,7 @@ export class PeriodClosesResource extends Resource {
   ): Promise<PeriodClose> {
     return await this.unwrap<PeriodClose>(
       'POST',
-      `/v1/period_closes/${encodePathSegment(id)}/reopen`,
+      `/api/v1/period_closes/${encodePathSegment(id)}/reopen`,
       toRequestOptions(params, { body: { reopened_by_label: params.reopenedByLabel } }),
     )
   }
@@ -88,14 +88,14 @@ export class AccountTemplatesResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<AccountTemplate>(
       'POST',
-      '/v1/account_templates',
+      '/api/v1/account_templates',
       toRequestOptions(config, { body }),
     )
   }
 
   async list(params: ListParams = {}): Promise<Page<AccountTemplate>> {
     return await this.page<AccountTemplate>(
-      '/v1/account_templates',
+      '/api/v1/account_templates',
       { cursor: params.cursor, limit: params.limit },
       'cursor',
       toRequestOptions(params),
@@ -105,7 +105,7 @@ export class AccountTemplatesResource extends Resource {
   async get(name: string, config?: RequestConfig): Promise<AccountTemplate> {
     return await this.unwrap<AccountTemplate>(
       'GET',
-      `/v1/account_templates/${encodePathSegment(name)}`,
+      `/api/v1/account_templates/${encodePathSegment(name)}`,
       toRequestOptions(config),
     )
   }
@@ -121,7 +121,7 @@ export class ExportsResource extends Resource {
     const body = { resources: params.resources, format: params.format }
     return await this.unwrap<Export>(
       'POST',
-      '/v1/exports',
+      '/api/v1/exports',
       toRequestOptions(params, { body, idempotencyKey: params.idempotencyKey }),
     )
   }
@@ -129,7 +129,7 @@ export class ExportsResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<Export> {
     return await this.unwrap<Export>(
       'GET',
-      `/v1/exports/${encodePathSegment(id)}`,
+      `/api/v1/exports/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -140,14 +140,14 @@ export class OAuthClientsResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<OAuthClient>(
       'POST',
-      '/v1/oauth_clients',
+      '/api/v1/oauth_clients',
       toRequestOptions(config, { body }),
     )
   }
 
   async list(params: ListParams = {}): Promise<Page<OAuthClient>> {
     return await this.page<OAuthClient>(
-      '/v1/oauth_clients',
+      '/api/v1/oauth_clients',
       { cursor: params.cursor, limit: params.limit },
       'cursor',
       toRequestOptions(params),
@@ -157,7 +157,7 @@ export class OAuthClientsResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<OAuthClient> {
     return await this.unwrap<OAuthClient>(
       'GET',
-      `/v1/oauth_clients/${encodePathSegment(id)}`,
+      `/api/v1/oauth_clients/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -165,7 +165,7 @@ export class OAuthClientsResource extends Resource {
   async delete(id: string, config?: RequestConfig): Promise<void> {
     await this.raw<void>(
       'DELETE',
-      `/v1/oauth_clients/${encodePathSegment(id)}`,
+      `/api/v1/oauth_clients/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -173,7 +173,7 @@ export class OAuthClientsResource extends Resource {
   async rotateSecret(id: string, config?: IdempotentRequestConfig): Promise<OAuthClient> {
     return await this.unwrap<OAuthClient>(
       'POST',
-      `/v1/oauth_clients/${encodePathSegment(id)}/rotate_secret`,
+      `/api/v1/oauth_clients/${encodePathSegment(id)}/rotate_secret`,
       toRequestOptions(config, { idempotencyKey: config?.idempotencyKey }),
     )
   }
@@ -182,12 +182,12 @@ export class OAuthClientsResource extends Resource {
 export class LedgersResource extends Resource {
   async create(params: LedgerInput): Promise<Ledger> {
     const { config, body } = splitConfig(params)
-    return await this.unwrap<Ledger>('POST', '/v1/ledgers', toRequestOptions(config, { body }))
+    return await this.unwrap<Ledger>('POST', '/api/v1/ledgers', toRequestOptions(config, { body }))
   }
 
   async list(params: ListParams = {}): Promise<Page<Ledger>> {
     return await this.page<Ledger>(
-      '/v1/ledgers',
+      '/api/v1/ledgers',
       { cursor: params.cursor, limit: params.limit },
       'cursor',
       toRequestOptions(params),
@@ -197,7 +197,7 @@ export class LedgersResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<Ledger> {
     return await this.unwrap<Ledger>(
       'GET',
-      `/v1/ledgers/${encodePathSegment(id)}`,
+      `/api/v1/ledgers/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -209,7 +209,7 @@ export class LedgersResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<Ledger>(
       'PATCH',
-      `/v1/ledgers/${encodePathSegment(id)}`,
+      `/api/v1/ledgers/${encodePathSegment(id)}`,
       toRequestOptions(config, { body }),
     )
   }
@@ -217,6 +217,10 @@ export class LedgersResource extends Resource {
 
 export class OrganizationsResource extends Resource {
   async me(config?: RequestConfig): Promise<Organization> {
-    return await this.unwrap<Organization>('GET', '/v1/organizations/me', toRequestOptions(config))
+    return await this.unwrap<Organization>(
+      'GET',
+      '/api/v1/organizations/me',
+      toRequestOptions(config),
+    )
   }
 }

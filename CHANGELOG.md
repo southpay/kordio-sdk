@@ -13,6 +13,21 @@ Removed three options that had no consumer and no test: `onToken` and
 `expirySkewSeconds` on `OAuthAuthProvider`, and the unused `Query` and `Body`
 type helpers. Implement `AuthProvider` if you need to control token caching.
 
+## 0.1.2
+
+Fixed: every ledger call reached a path the API does not serve. The client
+addressed `https://api.kordio.io/v1/...` while the ledger is mounted under
+`/api/v1`, so all 33 ledger operations returned 404. Control was unaffected.
+
+The tests asserted the broken paths, which is why the bug shipped. They now
+assert the paths production answers on, and one test pins the default base URL
+so a prefix change cannot pass silently again.
+
+The paths are generated from the ledger OpenAPI spec, which carried the same
+fault: its local server included the `/api` prefix while its production server
+did not, so the spec resolved correctly against localhost and never against
+production. The spec was corrected first and the client regenerated from it.
+
 ## 0.1.1
 
 No functional change. Republished so the tarball carries a provenance

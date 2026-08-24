@@ -49,141 +49,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/healthz": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Liveness + DB probe */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Healthy */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            checks?: {
-                                database?: boolean;
-                            };
-                            /** @enum {string} */
-                            status?: "ok";
-                            version?: string;
-                        };
-                    };
-                };
-                /** @description Degraded (database unreachable) */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/oauth/token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Issue an access token
-         * @description RFC 6749 §4.4 client_credentials. Authenticate with HTTP Basic
-         *     (`client_id:client_secret`) **or** with `client_id` and
-         *     `client_secret` in the form body.
-         *
-         *     Tokens are HS256 JWTs valid for one hour. They carry `tenant_id`,
-         *     `mode`, and the granted `scope`. Decode them at jwt.io to inspect.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/x-www-form-urlencoded": {
-                        client_id?: string;
-                        client_secret?: string;
-                        /** @enum {string} */
-                        grant_type: "client_credentials";
-                        /**
-                         * @description Space-separated subset of granted scopes. Optional; defaults to all.
-                         * @example ledger:read ledger:write
-                         */
-                        scope?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Token issued */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            /** @description HS256 JWT */
-                            access_token: string;
-                            /** @example 3600 */
-                            expires_in: number;
-                            scope?: string;
-                            /** @enum {string} */
-                            token_type: "Bearer";
-                        };
-                    };
-                };
-                /** @description invalid_client (bad credentials or disabled client) */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["OAuthError"];
-                    };
-                };
-                /** @description invalid_request / unsupported_grant_type / invalid_scope */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["OAuthError"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/_meta/capabilities": {
+    "/api/v1/_meta/capabilities": {
         parameters: {
             query?: never;
             header?: never;
@@ -323,7 +189,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/account_templates": {
+    "/api/v1/account_templates": {
         parameters: {
             query?: never;
             header?: never;
@@ -446,7 +312,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/account_templates/{name}": {
+    "/api/v1/account_templates/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -484,7 +350,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/accounts": {
+    "/api/v1/accounts": {
         parameters: {
             query?: never;
             header?: never;
@@ -590,7 +456,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/accounts/{id}": {
+    "/api/v1/accounts/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -630,7 +496,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/accounts/{id}/balance": {
+    "/api/v1/accounts/{id}/balance": {
         parameters: {
             query?: never;
             header?: never;
@@ -681,7 +547,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/accounts/{id}/category_balance": {
+    "/api/v1/accounts/{id}/category_balance": {
         parameters: {
             query?: never;
             header?: never;
@@ -727,7 +593,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/accounts/{id}/postings": {
+    "/api/v1/accounts/{id}/postings": {
         parameters: {
             query?: never;
             header?: never;
@@ -785,7 +651,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/accounts/{id}/statement": {
+    "/api/v1/accounts/{id}/statement": {
         parameters: {
             query?: never;
             header?: never;
@@ -842,7 +708,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/events": {
+    "/api/v1/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -906,7 +772,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/events/{id}": {
+    "/api/v1/events/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -945,7 +811,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/exports": {
+    "/api/v1/exports": {
         parameters: {
             query?: never;
             header?: never;
@@ -1028,7 +894,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/exports/{id}": {
+    "/api/v1/exports/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1073,7 +939,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/external_transactions": {
+    "/api/v1/external_transactions": {
         parameters: {
             query?: never;
             header?: never;
@@ -1130,7 +996,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/external_transactions/{id}": {
+    "/api/v1/external_transactions/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1167,7 +1033,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/external_transactions/{id}/ignore": {
+    "/api/v1/external_transactions/{id}/ignore": {
         parameters: {
             query?: never;
             header?: never;
@@ -1222,7 +1088,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/external_transactions/{id}/match": {
+    "/api/v1/external_transactions/{id}/match": {
         parameters: {
             query?: never;
             header?: never;
@@ -1285,7 +1151,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/external_transactions/{id}/matches": {
+    "/api/v1/external_transactions/{id}/matches": {
         parameters: {
             query?: never;
             header?: never;
@@ -1324,7 +1190,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/external_transactions/{id}/unmatch": {
+    "/api/v1/external_transactions/{id}/unmatch": {
         parameters: {
             query?: never;
             header?: never;
@@ -1378,7 +1244,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/inbound/sources/{token}": {
+    "/api/v1/inbound/sources/{token}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1435,7 +1301,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/ledgers": {
+    "/api/v1/ledgers": {
         parameters: {
             query?: never;
             header?: never;
@@ -1515,7 +1381,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/ledgers/{id}": {
+    "/api/v1/ledgers/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1585,7 +1451,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/v1/oauth_clients": {
+    "/api/v1/oauth_clients": {
         parameters: {
             query?: never;
             header?: never;
@@ -1686,7 +1552,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/oauth_clients/{id}": {
+    "/api/v1/oauth_clients/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1751,7 +1617,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/oauth_clients/{id}/rotate_secret": {
+    "/api/v1/oauth_clients/{id}/rotate_secret": {
         parameters: {
             query?: never;
             header?: never;
@@ -1812,7 +1678,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/organizations/me": {
+    "/api/v1/organizations/me": {
         parameters: {
             query?: never;
             header?: never;
@@ -1852,7 +1718,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/period_closes": {
+    "/api/v1/period_closes": {
         parameters: {
             query?: never;
             header?: never;
@@ -1942,7 +1808,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/period_closes/{id}": {
+    "/api/v1/period_closes/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1979,7 +1845,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/period_closes/{id}/reopen": {
+    "/api/v1/period_closes/{id}/reopen": {
         parameters: {
             query?: never;
             header?: never;
@@ -2038,7 +1904,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/postings": {
+    "/api/v1/postings": {
         parameters: {
             query?: never;
             header?: never;
@@ -2104,7 +1970,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/postings/{id}/reconciliations": {
+    "/api/v1/postings/{id}/reconciliations": {
         parameters: {
             query?: never;
             header?: never;
@@ -2153,7 +2019,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reconciliation_runs": {
+    "/api/v1/reconciliation_runs": {
         parameters: {
             query?: never;
             header?: never;
@@ -2303,7 +2169,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reconciliation_runs/{id}": {
+    "/api/v1/reconciliation_runs/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2340,7 +2206,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reports/balance_sheet": {
+    "/api/v1/reports/balance_sheet": {
         parameters: {
             query?: never;
             header?: never;
@@ -2384,7 +2250,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reports/cash_flow": {
+    "/api/v1/reports/cash_flow": {
         parameters: {
             query?: never;
             header?: never;
@@ -2428,7 +2294,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reports/fund_segregation": {
+    "/api/v1/reports/fund_segregation": {
         parameters: {
             query?: never;
             header?: never;
@@ -2486,7 +2352,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reports/income_statement": {
+    "/api/v1/reports/income_statement": {
         parameters: {
             query?: never;
             header?: never;
@@ -2530,7 +2396,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reports/reserves_outstanding": {
+    "/api/v1/reports/reserves_outstanding": {
         parameters: {
             query?: never;
             header?: never;
@@ -2571,7 +2437,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reports/trial_balance": {
+    "/api/v1/reports/trial_balance": {
         parameters: {
             query?: never;
             header?: never;
@@ -2622,7 +2488,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reserves": {
+    "/api/v1/reserves": {
         parameters: {
             query?: never;
             header?: never;
@@ -2699,7 +2565,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reserves/{id}/claw": {
+    "/api/v1/reserves/{id}/claw": {
         parameters: {
             query?: never;
             header?: never;
@@ -2773,7 +2639,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/reserves/{id}/release": {
+    "/api/v1/reserves/{id}/release": {
         parameters: {
             query?: never;
             header?: never;
@@ -2846,7 +2712,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/sources": {
+    "/api/v1/sources": {
         parameters: {
             query?: never;
             header?: never;
@@ -2944,7 +2810,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/sources/{id}": {
+    "/api/v1/sources/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3002,7 +2868,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/v1/sources/{id}/inbound": {
+    "/api/v1/sources/{id}/inbound": {
         parameters: {
             query?: never;
             header?: never;
@@ -3075,7 +2941,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/sources/{source_id}/external_transactions": {
+    "/api/v1/sources/{source_id}/external_transactions": {
         parameters: {
             query?: never;
             header?: never;
@@ -3151,7 +3017,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/sources/{source_id}/reconciliation_runs": {
+    "/api/v1/sources/{source_id}/reconciliation_runs": {
         parameters: {
             query?: never;
             header?: never;
@@ -3223,7 +3089,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tenants/me/anonymize": {
+    "/api/v1/tenants/me/anonymize": {
         parameters: {
             query?: never;
             header?: never;
@@ -3300,7 +3166,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/transactions": {
+    "/api/v1/transactions": {
         parameters: {
             query?: never;
             header?: never;
@@ -3432,7 +3298,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/transactions/{id}": {
+    "/api/v1/transactions/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3559,7 +3425,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/v1/transactions/{id}/commit": {
+    "/api/v1/transactions/{id}/commit": {
         parameters: {
             query?: never;
             header?: never;
@@ -3615,7 +3481,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/transactions/{id}/refund": {
+    "/api/v1/transactions/{id}/refund": {
         parameters: {
             query?: never;
             header?: never;
@@ -3733,7 +3599,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/transactions/{id}/reverse": {
+    "/api/v1/transactions/{id}/reverse": {
         parameters: {
             query?: never;
             header?: never;
@@ -3805,7 +3671,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/transactions/bulk": {
+    "/api/v1/transactions/bulk": {
         parameters: {
             query?: never;
             header?: never;
@@ -3874,7 +3740,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/transactions/lookup": {
+    "/api/v1/transactions/lookup": {
         parameters: {
             query?: never;
             header?: never;
@@ -3951,7 +3817,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/webhook_deliveries/{id}": {
+    "/api/v1/webhook_deliveries/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3990,7 +3856,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/webhook_deliveries/{id}/redeliver": {
+    "/api/v1/webhook_deliveries/{id}/redeliver": {
         parameters: {
             query?: never;
             header?: never;
@@ -4056,7 +3922,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/webhook_endpoints": {
+    "/api/v1/webhook_endpoints": {
         parameters: {
             query?: never;
             header?: never;
@@ -4121,7 +3987,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/webhook_endpoints/{id}": {
+    "/api/v1/webhook_endpoints/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -4213,7 +4079,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/v1/webhook_endpoints/{id}/deliveries": {
+    "/api/v1/webhook_endpoints/{id}/deliveries": {
         parameters: {
             query?: never;
             header?: never;
@@ -4274,7 +4140,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/webhook_endpoints/{id}/deliveries/failed_count": {
+    "/api/v1/webhook_endpoints/{id}/deliveries/failed_count": {
         parameters: {
             query?: never;
             header?: never;
@@ -4330,7 +4196,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/webhook_endpoints/{id}/rotate_secret": {
+    "/api/v1/webhook_endpoints/{id}/rotate_secret": {
         parameters: {
             query?: never;
             header?: never;
@@ -4406,7 +4272,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/webhook_endpoints/{id}/test_send": {
+    "/api/v1/webhook_endpoints/{id}/test_send": {
         parameters: {
             query?: never;
             header?: never;
@@ -4473,6 +4339,140 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/healthz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liveness + DB probe */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Healthy */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            checks?: {
+                                database?: boolean;
+                            };
+                            /** @enum {string} */
+                            status?: "ok";
+                            version?: string;
+                        };
+                    };
+                };
+                /** @description Degraded (database unreachable) */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue an access token
+         * @description RFC 6749 section 4.4 client_credentials. Authenticate with HTTP Basic
+         *     (`client_id:client_secret`) **or** with `client_id` and
+         *     `client_secret` in the form body.
+         *
+         *     Tokens are HS256 JWTs valid for one hour. They carry `tenant_id`,
+         *     `mode`, and the granted `scope`. Decode them at jwt.io to inspect.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/x-www-form-urlencoded": {
+                        client_id?: string;
+                        client_secret?: string;
+                        /** @enum {string} */
+                        grant_type: "client_credentials";
+                        /**
+                         * @description Space-separated subset of granted scopes. Optional; defaults to all.
+                         * @example ledger:read ledger:write
+                         */
+                        scope?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Token issued */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description HS256 JWT */
+                            access_token: string;
+                            /** @example 3600 */
+                            expires_in: number;
+                            scope?: string;
+                            /** @enum {string} */
+                            token_type: "Bearer";
+                        };
+                    };
+                };
+                /** @description invalid_client (bad credentials or disabled client) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OAuthError"];
+                    };
+                };
+                /** @description invalid_request / unsupported_grant_type / invalid_scope */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OAuthError"];
                     };
                 };
             };

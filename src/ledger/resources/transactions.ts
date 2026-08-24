@@ -79,7 +79,7 @@ export class TransactionsResource extends Resource {
       external_ref: params.externalRef,
     })
 
-    return await this.unwrap<Transaction>('POST', '/v1/transactions', {
+    return await this.unwrap<Transaction>('POST', '/api/v1/transactions', {
       ...toRequestOptions(params, { body }),
       query: compact({ expand: params.expand, dry_run: dryRun || undefined }),
       idempotencyKey: dryRun ? undefined : params.idempotencyKey,
@@ -100,7 +100,7 @@ export class TransactionsResource extends Resource {
     const query = config?.expand ? { expand: config.expand } : undefined
     return await this.unwrap<Transaction>(
       'GET',
-      `/v1/transactions/${encodePathSegment(id)}`,
+      `/api/v1/transactions/${encodePathSegment(id)}`,
       toRequestOptions(config, { query }),
     )
   }
@@ -112,7 +112,7 @@ export class TransactionsResource extends Resource {
     const { signal, timeoutMs, maxRetries, headers, ledgerId, ...body } = params
     return await this.unwrap<Transaction>(
       'PATCH',
-      `/v1/transactions/${encodePathSegment(id)}`,
+      `/api/v1/transactions/${encodePathSegment(id)}`,
       toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
     )
   }
@@ -125,7 +125,7 @@ export class TransactionsResource extends Resource {
       expand: params.expand,
     }
     return await this.page<Transaction>(
-      '/v1/transactions',
+      '/api/v1/transactions',
       query,
       'cursor',
       toRequestOptions(params),
@@ -143,7 +143,7 @@ export class TransactionsResource extends Resource {
     const query = { rail: params.rail, kind: params.kind, value: params.value }
     return await this.unwrap<Transaction>(
       'GET',
-      '/v1/transactions/lookup',
+      '/api/v1/transactions/lookup',
       toRequestOptions(params, { query }),
     )
   }
@@ -166,7 +166,7 @@ export class TransactionsResource extends Resource {
 
     const response = await this.raw<BulkResult>(
       'POST',
-      '/v1/transactions/bulk',
+      '/api/v1/transactions/bulk',
       toRequestOptions(params, { body: { transactions: items } }),
     )
     return extractData<BulkResult>(response.data)
@@ -176,7 +176,7 @@ export class TransactionsResource extends Resource {
     const key = requireIdempotencyKey(config.idempotencyKey, 'transactions.reverse')
     return await this.unwrap<Transaction>(
       'POST',
-      `/v1/transactions/${encodePathSegment(id)}/reverse`,
+      `/api/v1/transactions/${encodePathSegment(id)}/reverse`,
       toRequestOptions(config, { idempotencyKey: key }),
     )
   }
@@ -185,7 +185,7 @@ export class TransactionsResource extends Resource {
     const key = requireIdempotencyKey(config.idempotencyKey, 'transactions.commit')
     return await this.unwrap<Transaction>(
       'POST',
-      `/v1/transactions/${encodePathSegment(id)}/commit`,
+      `/api/v1/transactions/${encodePathSegment(id)}/commit`,
       toRequestOptions(config, { idempotencyKey: key }),
     )
   }
@@ -199,7 +199,7 @@ export class TransactionsResource extends Resource {
     })
     return await this.unwrap<Transaction>(
       'POST',
-      `/v1/transactions/${encodePathSegment(id)}/refund`,
+      `/api/v1/transactions/${encodePathSegment(id)}/refund`,
       toRequestOptions(params, { body, idempotencyKey: key }),
     )
   }

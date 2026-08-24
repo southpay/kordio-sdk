@@ -48,6 +48,36 @@ Do not add complexity to make code appear robust. Avoid:
 The SDK is robust because it has clear contracts, not because every function
 handles every imaginable scenario.
 
+### Branches and messages
+
+A branch should choose between different **values**, not between two phrasings
+of the same sentence. If both arms of a conditional contain the same
+sub-expression, the branch is in the wrong place.
+
+Never invent a placeholder for a value that is simply absent. `'unknown'`,
+`'n/a'` and `'none'` are noise standing where information should be, and they
+leak into comparisons and log lines as if they were real. If a value is
+missing, leave it out of the sentence.
+
+This is the shape to avoid:
+
+```ts
+result.outcome === 'denied'
+  ? `action denied by rule "${result.rule ?? 'unknown'}"`
+  : `action requires approval (rule "${result.rule ?? 'unknown'}")`
+```
+
+Two arms, the same interpolation in both, differing only in wording and
+punctuation, with a fabricated value covering the null. Written once:
+
+```ts
+result.rule ? `${result.outcome} by ${result.rule}` : result.outcome
+```
+
+Build the message once. Prefer a named local over a ternary buried inside a
+call argument. Ternaries picking a sign, a separator or a genuine domain value
+(`'credit'` versus `'debit'`) are fine and should stay.
+
 ### Public API versus internal code
 
 Public functions, classes, types and exported utilities should have stable

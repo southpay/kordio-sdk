@@ -46,7 +46,7 @@ Generated code goes stale quietly, so both failure modes are checked.
 
 **`bun run check:coverage`** parses both specs, then parses the SDK source for the paths it actually calls, and fails on any operation no method reaches. When someone adds an endpoint to a spec, this is what tells you. Every exception is explicit and lives in `scripts/check-coverage.ts`:
 
-`INTENTIONALLY_UNWRAPPED` lists operations that should not have a method, each with a reason. `DELETE /v1/transactions/{id}` is a documented `405` because the ledger is append-only. `POST /oauth/token` is handled inside the auth provider.
+`INTENTIONALLY_UNWRAPPED` lists operations that should not have a method, each with a reason. `DELETE /api/v1/transactions/{id}` is a documented `405` because the ledger is append-only. `POST /oauth/token` is handled inside the auth provider.
 
 `COVERED_BY` lists operations served by a method whose path is built dynamically, so the static scan cannot see it. The shared `ApprovalQueue` and the cosign calls are the two cases. Each entry names the class and method that serves it, and the checker confirms that symbol still exists, so renaming the method fails the build instead of leaving a stale exemption behind.
 
@@ -88,7 +88,7 @@ A deep camelCase↔snake_case converter was considered and rejected. Response ty
 - `transactions.lookup` was sending `idempotency_key`; the endpoint takes a required `rail`/`kind`/`value` tuple. The spec said so plainly and the method had been written from a guess.
 - `accounts.statement` was typed as a page of postings; it returns a single `account_statement` object with opening and closing balances.
 - `accounts.create` demanded `overdraft_policy` because openapi-typescript treats a property with a `default` as always present. That holds for responses but not for request bodies. Fixed globally with `defaultNonNullable: false` in `scripts/generate.ts`.
-- The OAuth token endpoint lives at the host root, not under the API path prefix, so a `baseUrl` of `http://localhost:4000/api` produced a 404 on every token request. Now resolved with `new URL('/oauth/token', baseUrl)`.
+- The OAuth token endpoint lives at the host root while the ledger sits under `/api`, so the token URL is resolved with `new URL('/oauth/token', baseUrl)` rather than by concatenation. That also keeps working if a caller points `baseUrl` at a gateway path.
 
 None of those are visible to `check:coverage`, which only asks whether some method calls a path, not whether it calls it correctly. Coverage tells you something is missing. Only the live run tells you the parts you did write are right.
 

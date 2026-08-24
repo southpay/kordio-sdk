@@ -59,17 +59,17 @@ export interface ExternalTransactionListParams extends ListParams {
 export class SourcesResource extends Resource {
   async create(params: SourceInput & RequestConfig): Promise<Source> {
     const { config, body } = splitConfig(params)
-    return await this.unwrap<Source>('POST', '/v1/sources', toRequestOptions(config, { body }))
+    return await this.unwrap<Source>('POST', '/api/v1/sources', toRequestOptions(config, { body }))
   }
 
   async list(params: ListParams = {}): Promise<Page<Source>> {
-    return await this.page<Source>('/v1/sources', {}, 'cursor', toRequestOptions(params))
+    return await this.page<Source>('/api/v1/sources', {}, 'cursor', toRequestOptions(params))
   }
 
   async get(id: string, config?: RequestConfig): Promise<Source> {
     return await this.unwrap<Source>(
       'GET',
-      `/v1/sources/${encodePathSegment(id)}`,
+      `/api/v1/sources/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -78,7 +78,7 @@ export class SourcesResource extends Resource {
     const { config, body } = splitConfig(params)
     return await this.unwrap<Source>(
       'PATCH',
-      `/v1/sources/${encodePathSegment(id)}`,
+      `/api/v1/sources/${encodePathSegment(id)}`,
       toRequestOptions(config, { body }),
     )
   }
@@ -90,7 +90,7 @@ export class SourcesResource extends Resource {
     const { items, ...config } = params
     return await this.unwrap<IngestResult>(
       'POST',
-      `/v1/sources/${encodePathSegment(sourceId)}/external_transactions`,
+      `/api/v1/sources/${encodePathSegment(sourceId)}/external_transactions`,
       toRequestOptions(config, { body: { items } }),
     )
   }
@@ -103,7 +103,7 @@ export class SourcesResource extends Resource {
     const body = compact({ ...rest, from: isoDate(params.from), to: isoDate(params.to) })
     return await this.unwrap<ReconciliationRun>(
       'POST',
-      `/v1/sources/${encodePathSegment(sourceId)}/reconciliation_runs`,
+      `/api/v1/sources/${encodePathSegment(sourceId)}/reconciliation_runs`,
       toRequestOptions(config, { body }),
     )
   }
@@ -111,7 +111,7 @@ export class SourcesResource extends Resource {
   async enableInbound(id: string, config?: RequestConfig): Promise<InboundEndpoint> {
     return await this.unwrap<InboundEndpoint>(
       'POST',
-      `/v1/sources/${encodePathSegment(id)}/inbound`,
+      `/api/v1/sources/${encodePathSegment(id)}/inbound`,
       toRequestOptions(config),
     )
   }
@@ -119,7 +119,7 @@ export class SourcesResource extends Resource {
   async disableInbound(id: string, config?: RequestConfig): Promise<void> {
     await this.raw<void>(
       'DELETE',
-      `/v1/sources/${encodePathSegment(id)}/inbound`,
+      `/api/v1/sources/${encodePathSegment(id)}/inbound`,
       toRequestOptions(config),
     )
   }
@@ -134,14 +134,14 @@ export class ReconciliationRunsResource extends Resource {
     const body = compact({ ...rest, from: isoDate(params.from), to: isoDate(params.to) })
     return await this.unwrap<ReconciliationRun>(
       'POST',
-      '/v1/reconciliation_runs',
+      '/api/v1/reconciliation_runs',
       toRequestOptions(config, { body }),
     )
   }
 
   async list(params: ListParams = {}): Promise<Page<ReconciliationRun>> {
     return await this.page<ReconciliationRun>(
-      '/v1/reconciliation_runs',
+      '/api/v1/reconciliation_runs',
       { limit: params.limit },
       'cursor',
       toRequestOptions(params),
@@ -151,7 +151,7 @@ export class ReconciliationRunsResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<ReconciliationRun> {
     return await this.unwrap<ReconciliationRun>(
       'GET',
-      `/v1/reconciliation_runs/${encodePathSegment(id)}`,
+      `/api/v1/reconciliation_runs/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
@@ -169,7 +169,7 @@ export class ExternalTransactionsResource extends Resource {
       to: isoDate(params.to),
     }
     return await this.page<ExternalTransaction>(
-      '/v1/external_transactions',
+      '/api/v1/external_transactions',
       query,
       'cursor',
       toRequestOptions(params),
@@ -179,14 +179,14 @@ export class ExternalTransactionsResource extends Resource {
   async get(id: string, config?: RequestConfig): Promise<ExternalTransaction> {
     return await this.unwrap<ExternalTransaction>(
       'GET',
-      `/v1/external_transactions/${encodePathSegment(id)}`,
+      `/api/v1/external_transactions/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
 
   async matches(id: string, params: ListParams = {}): Promise<Page<ReconciliationMatch>> {
     return await this.page<ReconciliationMatch>(
-      `/v1/external_transactions/${encodePathSegment(id)}/matches`,
+      `/api/v1/external_transactions/${encodePathSegment(id)}/matches`,
       { cursor: params.cursor, limit: params.limit },
       'cursor',
       toRequestOptions(params),
@@ -200,7 +200,7 @@ export class ExternalTransactionsResource extends Resource {
     const body = { posting_ids: params.postingIds, note: params.note }
     return await this.unwrap<ExternalTransaction>(
       'POST',
-      `/v1/external_transactions/${encodePathSegment(id)}/match`,
+      `/api/v1/external_transactions/${encodePathSegment(id)}/match`,
       toRequestOptions(params, { body }),
     )
   }
@@ -211,7 +211,7 @@ export class ExternalTransactionsResource extends Resource {
   ): Promise<ExternalTransaction> {
     return await this.unwrap<ExternalTransaction>(
       'POST',
-      `/v1/external_transactions/${encodePathSegment(id)}/unmatch`,
+      `/api/v1/external_transactions/${encodePathSegment(id)}/unmatch`,
       toRequestOptions(params, { body: { reason: params.reason } }),
     )
   }
@@ -222,7 +222,7 @@ export class ExternalTransactionsResource extends Resource {
   ): Promise<ExternalTransaction> {
     return await this.unwrap<ExternalTransaction>(
       'POST',
-      `/v1/external_transactions/${encodePathSegment(id)}/ignore`,
+      `/api/v1/external_transactions/${encodePathSegment(id)}/ignore`,
       toRequestOptions(params, { body: { reason: params.reason } }),
     )
   }

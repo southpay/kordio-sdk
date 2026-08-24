@@ -608,6 +608,11 @@ export interface paths {
          *     The response carries `api_key` exactly once. Kordio stores only a digest and
          *     compares it in constant time; if you lose the key, rotate the agent.
          *
+         *     Unless `skip_starter_policy` is set, the agent is created with an active starter
+         *     policy that caps a single action at 50000 cents and holds anything above 10000
+         *     cents for a person. It is returned as `starter_policy`, and it stays in force
+         *     until you disable it.
+         *
          *     Creating an agent consumes plan headroom, and creating a `live` agent requires a
          *     plan with live mode. Either limit returns `422`.
          */
@@ -3193,6 +3198,11 @@ export interface operations {
                      */
                     scopes?: string[];
                     /**
+                     * @description Create the agent with no policy at all. Every authorization then denies with the rule `no_policy` until you write one.
+                     * @default false
+                     */
+                    skip_starter_policy?: boolean;
+                    /**
                      * @default active
                      * @enum {string}
                      */
@@ -3214,6 +3224,8 @@ export interface operations {
                              * @example krt_test_9f3a1c7e42b8d05a6e1f8c3d
                              */
                             api_key?: string;
+                            /** @description The policy created alongside the agent, or `null` when `skip_starter_policy` was set. */
+                            starter_policy?: components["schemas"]["Policy"] | null;
                         };
                     };
                 };

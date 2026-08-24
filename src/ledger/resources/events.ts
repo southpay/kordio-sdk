@@ -18,13 +18,13 @@ export class EventsResource extends Resource {
       resource_id: params.resourceId,
       since: params.since instanceof Date ? params.since.toISOString() : params.since,
     }
-    return await this.page<LedgerEvent>('/v1/events', query, 'cursor', toRequestOptions(params))
+    return await this.page<LedgerEvent>('/api/v1/events', query, 'cursor', toRequestOptions(params))
   }
 
   async get(id: string, config?: RequestConfig): Promise<LedgerEvent> {
     return await this.unwrap<LedgerEvent>(
       'GET',
-      `/v1/events/${encodePathSegment(id)}`,
+      `/api/v1/events/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }

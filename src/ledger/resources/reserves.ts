@@ -19,7 +19,7 @@ export class ReservesResource extends Resource {
     const key = requireKey(params.idempotencyKey, 'reserves.sweep')
     return await this.unwrap<ReserveOpResult>(
       'POST',
-      '/v1/reserves',
+      '/api/v1/reserves',
       toRequestOptions(config, { body, idempotencyKey: key }),
     )
   }
@@ -32,7 +32,7 @@ export class ReservesResource extends Resource {
     const key = requireKey(params.idempotencyKey, 'reserves.release')
     return await this.unwrap<ReserveOpResult>(
       'POST',
-      `/v1/reserves/${encodePathSegment(id)}/release`,
+      `/api/v1/reserves/${encodePathSegment(id)}/release`,
       toRequestOptions(config, { body, idempotencyKey: key }),
     )
   }
@@ -45,7 +45,7 @@ export class ReservesResource extends Resource {
     const key = requireKey(params.idempotencyKey, 'reserves.claw')
     return await this.unwrap<ReserveOpResult>(
       'POST',
-      `/v1/reserves/${encodePathSegment(id)}/claw`,
+      `/api/v1/reserves/${encodePathSegment(id)}/claw`,
       toRequestOptions(config, { body, idempotencyKey: key }),
     )
   }

@@ -47,5 +47,8 @@ export function extractData<T>(body: unknown): T {
 }
 
 export function encodePathSegment(value: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new TypeError('path segment is empty; check the id you passed')
+  }
   return encodeURIComponent(value).replace(/%3A/g, ':')
 }

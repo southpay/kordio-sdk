@@ -19,9 +19,9 @@ for await (const intent of held) {
   const id = intent.id ?? ''
   const impact = await workspace.actionIntents.impact(id)
   const amount = impact.amount_cents ?? 0
-  const vendor = intent.resource ?? 'unknown'
+  const vendor = intent.resource
 
-  if (amount <= DESK_LIMIT_CENTS && TRUSTED_VENDORS.has(vendor)) {
+  if (vendor && TRUSTED_VENDORS.has(vendor) && amount <= DESK_LIMIT_CENTS) {
     await workspace.actionIntents.approve(id)
     approved++
     continue
@@ -36,10 +36,9 @@ for await (const intent of held) {
   }
 
   escalated++
-  console.log(
-    `${id}  ${vendor}  ${amount} cents  held by ${impact.rule}  ` +
-      `${impact.session?.open_holds ?? 0} other holds on this budget`,
-  )
+  const holds = impact.session?.open_holds ?? 0
+  console.log(`${id}  ${vendor ? `${vendor}  ` : ''}${amount} cents  held by ${impact.rule}`)
+  if (holds > 0) console.log(`  ${holds} other intents are waiting on the same budget`)
 }
 
 console.log(`approved ${approved}, denied ${denied}, left for a person ${escalated}`)

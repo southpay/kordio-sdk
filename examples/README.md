@@ -7,7 +7,7 @@ SDK. They read configuration from the environment:
 export KORDIO_CLIENT_ID=... KORDIO_CLIENT_SECRET=... KORDIO_LEDGER_ID=...
 export KORDIO_AGENT_KEY=krt_test_...
 export KORDIO_DASHBOARD_TOKEN=... KORDIO_WORKSPACE=your-workspace
-export KORDIO_BASE_URL=http://localhost:4000/api   # omit for production
+export KORDIO_BASE_URL=http://localhost:4000        # omit for production
 ```
 
 Run one with `bun examples/record-a-sale.ts`. Several of them write real data.

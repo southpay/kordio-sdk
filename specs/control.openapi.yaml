@@ -9,7 +9,7 @@ info:
 
     Two credentials reach this API and they are deliberately not interchangeable.
 
-    A **agent key** (`krt_live_…` or `krt_test_…`) is what an agent carries. It reaches
+    An **agent key** (`krt_live_...` or `krt_test_...`) is what an agent carries. It reaches
     `/v1/agent/*` and can ask for authorization, but it can never write policy. An agent
     able to widen its own limits is not governed by them.
 
@@ -1143,6 +1143,11 @@ paths:
         The response carries `api_key` exactly once. Kordio stores only a digest and
         compares it in constant time; if you lose the key, rotate the agent.
 
+        Unless `skip_starter_policy` is set, the agent is created with an active starter
+        policy that caps a single action at 50000 cents and holds anything above 10000
+        cents for a person. It is returned as `starter_policy`, and it stays in force
+        until you disable it.
+
         Creating an agent consumes plan headroom, and creating a `live` agent requires a
         plan with live mode. Either limit returns `422`.
       security:
@@ -1176,6 +1181,12 @@ paths:
                     (`payment.create`), a namespace wildcard (`payment.*`), or `*`. An
                     empty array means unrestricted.
                   example: ["payment.*", "tool.invoke"]
+                skip_starter_policy:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Create the agent with no policy at all. Every authorization then
+                    denies with the rule `no_policy` until you write one.
       responses:
         '201':
           description: The agent, including its plaintext key.
@@ -1193,6 +1204,13 @@ paths:
                             type: string
                             description: Shown exactly once, at creation.
                             example: krt_test_9f3a1c7e42b8d05a6e1f8c3d
+                          starter_policy:
+                            nullable: true
+                            allOf:
+                              - $ref: '#/components/schemas/Policy'
+                            description: >-
+                              The policy created alongside the agent, or `null` when
+                              `skip_starter_policy` was set.
         '403':
           $ref: '#/components/responses/InsufficientRole'
         '404':
@@ -2884,7 +2902,7 @@ components:
       type: http
       scheme: bearer
       description: >-
-        An agent API key, `krt_live_…` or `krt_test_…`, shown exactly once at creation.
+        An agent API key, `krt_live_...` or `krt_test_...`, shown exactly once at creation.
         Kordio stores only a digest. This credential can ask for authorization and can
         never write policy.
     IdentityToken:

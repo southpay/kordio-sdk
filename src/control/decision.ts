@@ -56,11 +56,7 @@ export class KordioDeniedError extends Error {
   readonly result: DecisionResult<unknown>
 
   constructor(result: DecisionResult<unknown>) {
-    super(
-      result.outcome === 'denied'
-        ? `action denied by rule "${result.rule ?? 'unknown'}"`
-        : `action requires approval (rule "${result.rule ?? 'unknown'}")`,
-    )
+    super(result.rule ? `${result.outcome} by ${result.rule}` : result.outcome)
     this.name = 'KordioDeniedError'
     this.rule = result.rule
     this.detail = result.detail

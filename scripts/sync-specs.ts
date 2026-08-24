@@ -30,7 +30,7 @@ for (const spec of SPECS) {
     continue
   }
   await Bun.write(spec.vendored, next)
-  console.log(`  ${prev === null ? 'added     ' : 'updated   '} ${spec.name}`)
+  console.log(`  ${prev === null ? 'added' : 'updated'} ${spec.name}`)
   changed++
 }
 

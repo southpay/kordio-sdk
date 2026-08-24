@@ -153,7 +153,7 @@ describe('token endpoint location', () => {
     const kordio = new KordioLedger({
       clientId: 'c',
       clientSecret: 's',
-      baseUrl: 'http://localhost:4000/api',
+      baseUrl: 'http://localhost:4000',
       fetch: t.fetch,
     })
 

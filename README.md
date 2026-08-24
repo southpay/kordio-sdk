@@ -288,7 +288,7 @@ Unit tests run against a mock. To check the SDK against a live ledger:
 
 ```bash
 export KORDIO_CLIENT_ID=... KORDIO_CLIENT_SECRET=...
-export KORDIO_BASE_URL=http://localhost:4000/api   # omit for production
+export KORDIO_BASE_URL=http://localhost:4000        # omit for production
 bun run validate:live
 ```
 

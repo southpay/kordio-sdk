@@ -36,7 +36,7 @@ describe('transactions.create', () => {
 
     const request = server.last()
     expect(request.method).toBe('POST')
-    expect(request.url).toBe('https://api.test/v1/transactions')
+    expect(request.url).toBe('https://api.test/api/v1/transactions')
     expect(request.headers['idempotency-key']).toBe('order:4471:debit')
     expect(request.body).toEqual({
       postings: [
@@ -253,14 +253,16 @@ describe('balances', () => {
       },
     ])
     const balance = await client(server).balances.get('accounts_receivable:acme')
-    expect(server.last().url).toBe('https://api.test/v1/accounts/accounts_receivable:acme/balance')
+    expect(server.last().url).toBe(
+      'https://api.test/api/v1/accounts/accounts_receivable:acme/balance',
+    )
     expect(BigInt(balance.available ?? '0')).toBe(9700000n)
   })
 
   test('accounts.balance hits the same endpoint', async () => {
     const server = mockFetch([{ body: ledgerEnvelope({ object: 'balance' }) }])
     await client(server).accounts.balance('cash:usd')
-    expect(server.last().url).toBe('https://api.test/v1/accounts/cash:usd/balance')
+    expect(server.last().url).toBe('https://api.test/api/v1/accounts/cash:usd/balance')
   })
 })
 
@@ -268,7 +270,9 @@ describe('path encoding', () => {
   test('keeps colons readable but escapes slashes in ids', async () => {
     const server = mockFetch([{ body: ledgerEnvelope({}) }])
     await client(server).accounts.get('accounts_payable:onchain/acme')
-    expect(server.last().url).toBe('https://api.test/v1/accounts/accounts_payable:onchain%2Facme')
+    expect(server.last().url).toBe(
+      'https://api.test/api/v1/accounts/accounts_payable:onchain%2Facme',
+    )
   })
 })
 
@@ -297,7 +301,7 @@ describe('contract details the live API taught us', () => {
       value: '0xabc123',
     })
     const url = new URL(server.last().url)
-    expect(url.pathname).toBe('/v1/transactions/lookup')
+    expect(url.pathname).toBe('/api/v1/transactions/lookup')
     expect(Object.fromEntries(url.searchParams)).toEqual({
       rail: 'ethereum',
       kind: 'tx_hash',
@@ -344,5 +348,25 @@ describe('contract details the live API taught us', () => {
     const server = mockFetch([{ body: ledgerList([]) }])
     await client(server).accounts.list({ limit: 5 })
     expect(server.last().url).not.toContain('include_total')
+  })
+})
+
+describe('path segments', () => {
+  test('an empty id fails loudly instead of building a broken url', async () => {
+    const server = mockFetch([{ body: ledgerEnvelope({}) }])
+    await expect(client(server).accounts.get('')).rejects.toThrow(/path segment is empty/)
+    await expect(client(server).transactions.get('   ')).rejects.toThrow(/path segment is empty/)
+    expect(server.requests).toHaveLength(0)
+  })
+})
+
+describe('default base url', () => {
+  test('resolves to the prefix the ledger is served under, not the host root', async () => {
+    const server = mockFetch([{ status: 200, body: ledgerList([]) }])
+    const kordio = new KordioLedger({ accessToken: 'test-token', fetch: server.fetch })
+
+    await kordio.accounts.list()
+
+    expect(server.last().url).toBe('https://api.kordio.io/api/v1/accounts')
   })
 })
