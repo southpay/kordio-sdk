@@ -278,3 +278,56 @@ describe('credential separation', () => {
     })
   })
 })
+
+describe('simulate', () => {
+  const SIMULATED = {
+    status: 200,
+    body: {
+      data: {
+        outcome: 'allowed',
+        rule: null,
+        detail: {},
+        headroom: { session_remaining_cents: 50000 },
+        policy_snapshot: [],
+      },
+    },
+  }
+
+  test('reads the decision straight off data, with no intent or cosignature', async () => {
+    const server = mockFetch([SIMULATED])
+    const result = await agent(server).actions.simulate({
+      budgetId: 'b_1',
+      actionType: 'payment.create',
+      costCents: 1000,
+    })
+    expect(result.outcome).toBe('allowed')
+    expect(result.allowed).toBe(true)
+    expect(result.headroom.session_remaining_cents).toBe(50000)
+    expect(server.last().url).toContain('/actions/simulate')
+    expect(server.last().headers['idempotency-key']).toBeUndefined()
+  })
+
+  test('a simulated denial reports the rule', async () => {
+    const server = mockFetch([
+      {
+        status: 200,
+        body: {
+          data: {
+            outcome: 'denied',
+            rule: 'per_transaction_cap',
+            detail: { max_cents: 50000 },
+            headroom: {},
+            policy_snapshot: [],
+          },
+        },
+      },
+    ])
+    const result = await agent(server).paymentIntents.simulate({
+      budgetId: 'b_1',
+      amountCents: 999999,
+    })
+    expect(result.outcome).toBe('denied')
+    expect(result.allowed).toBe(false)
+    expect(result.rule).toBe('per_transaction_cap')
+  })
+})

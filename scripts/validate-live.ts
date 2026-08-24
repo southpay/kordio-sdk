@@ -341,13 +341,20 @@ async function validateControl(): Promise<void> {
   })
 
   await step('simulate an action without reserving budget', async () => {
+    const before = await agent.budgets.get(budgetId)
     const result = await agent.actions.simulate({
       budgetId,
       actionType: 'payment.create',
       resource: 'sdk-validation.example',
       costCents: 1000,
     })
-    return `outcome=${result.outcome} rule=${result.rule}`
+    const after = await agent.budgets.get(budgetId)
+    if (before.spent_cents !== after.spent_cents) {
+      throw new Error(
+        `a simulation moved the budget: ${before.spent_cents} -> ${after.spent_cents}`,
+      )
+    }
+    return `outcome=${result.outcome} headroom=${JSON.stringify(result.headroom)}, budget untouched`
   })
 
   await step('authorize an action and branch on the outcome', async () => {

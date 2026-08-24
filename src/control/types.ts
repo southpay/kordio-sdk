@@ -98,6 +98,15 @@ export type DecisionResult<T> =
   | (DecisionResultBase<T> & { outcome: 'requires_approval'; allowed: false; cosignature: null })
   | (DecisionResultBase<T> & { outcome: 'denied'; allowed: false; cosignature: null })
 
+export interface SimulationResult {
+  outcome: Outcome
+  allowed: boolean
+  rule: string | null
+  detail: Record<string, unknown>
+  headroom: Headroom
+  decision: Decision
+}
+
 export type ActionResult = DecisionResult<ActionIntent>
 export type PaymentResult = DecisionResult<PaymentIntent>
 

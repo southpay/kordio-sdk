@@ -11,6 +11,7 @@ export type {
   Decision,
   Outcome,
   PaymentResult,
+  SimulationResult,
   SpendToken,
 } from './control/types'
 export {

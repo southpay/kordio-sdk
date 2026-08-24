@@ -1,6 +1,6 @@
 import { buildError } from '../core/errors'
 import type { HttpResponse } from '../core/http'
-import type { Decision, DecisionResult, Headroom, Outcome } from './types'
+import type { Decision, DecisionResult, Headroom, Outcome, SimulationResult } from './types'
 
 export interface DecisionEnvelope<T> {
   data?: T
@@ -47,6 +47,17 @@ export function toDecisionResult<T>(
     return { ...base, outcome, allowed: false, cosignature: null }
   }
   return { ...base, outcome: 'denied', allowed: false, cosignature: null }
+}
+
+export function toSimulationResult(decision: Decision): SimulationResult {
+  return {
+    outcome: decision.outcome as Outcome,
+    allowed: decision.outcome === 'allowed',
+    rule: decision.rule ?? null,
+    detail: (decision.detail ?? {}) as Record<string, unknown>,
+    headroom: (decision.headroom ?? {}) as Headroom,
+    decision,
+  }
 }
 
 export class KordioDeniedError extends Error {

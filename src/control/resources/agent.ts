@@ -1,6 +1,11 @@
 import { compact, isoDate } from '../../core/params'
 import { encodePathSegment, Resource } from '../../core/resource'
-import { DECISION_EXPECTED_STATUSES, type DecisionEnvelope, toDecisionResult } from '../decision'
+import {
+  DECISION_EXPECTED_STATUSES,
+  type DecisionEnvelope,
+  toDecisionResult,
+  toSimulationResult,
+} from '../decision'
 import { toRequestOptions } from '../request'
 import type {
   ActionIntent,
@@ -8,10 +13,12 @@ import type {
   ActionResult,
   Budget,
   BudgetParams,
+  Decision,
   PaymentIntent,
   PaymentParams,
   PaymentResult,
   RequestConfig,
+  SimulationResult,
   SpendToken,
   SpendTokenParams,
 } from '../types'
@@ -49,7 +56,7 @@ export class ActionsResource extends Resource {
     })
   }
 
-  async simulate(params: Omit<ActionParams, 'idempotencyKey'>): Promise<ActionResult> {
+  async simulate(params: Omit<ActionParams, 'idempotencyKey'>): Promise<SimulationResult> {
     const body = compact({
       budget_id: params.budgetId,
       action_type: params.actionType,
@@ -58,18 +65,12 @@ export class ActionsResource extends Resource {
       metadata: params.metadata,
       trace_id: params.traceId,
     })
-    const response = await this.raw<DecisionEnvelope<ActionIntent>>(
+    const decision = await this.unwrap<Decision>(
       'POST',
       '/control/v1/agent/actions/simulate',
-      {
-        ...toRequestOptions(params, { body }),
-        expectedStatuses: DECISION_EXPECTED_STATUSES,
-      },
+      toRequestOptions(params, { body }),
     )
-    return toDecisionResult<ActionIntent>(response, {
-      method: 'POST',
-      path: '/control/v1/agent/actions/simulate',
-    })
+    return toSimulationResult(decision)
   }
 
   async get(id: string, config?: RequestConfig): Promise<ActionIntent> {
@@ -165,25 +166,19 @@ export class AgentPaymentIntentsResource extends Resource {
 
   async simulate(
     params: Omit<PaymentParams, 'idempotencyKey' | 'spendTokenId' | 'decisionContext' | 'metadata'>,
-  ): Promise<PaymentResult> {
+  ): Promise<SimulationResult> {
     const body = compact({
       budget_id: params.budgetId,
       amount_cents: params.amountCents,
       counterparty: params.counterparty,
       trace_id: params.traceId,
     })
-    const response = await this.raw<DecisionEnvelope<PaymentIntent>>(
+    const decision = await this.unwrap<Decision>(
       'POST',
       '/control/v1/agent/payment_intents/simulate',
-      {
-        ...toRequestOptions(params, { body }),
-        expectedStatuses: DECISION_EXPECTED_STATUSES,
-      },
+      toRequestOptions(params, { body }),
     )
-    return toDecisionResult<PaymentIntent>(response, {
-      method: 'POST',
-      path: '/control/v1/agent/payment_intents/simulate',
-    })
+    return toSimulationResult(decision)
   }
 
   async get(id: string, config?: RequestConfig): Promise<PaymentIntent> {
