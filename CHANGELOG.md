@@ -1,0 +1,24 @@
+# Changelog
+
+All notable changes to this package are documented here. This project follows
+[semantic versioning](https://semver.org/).
+
+## Unreleased
+
+Initial release. Covers all 155 operations across the Kordio ledger and spend
+control APIs.
+
+- `KordioLedger` with OAuth client-credentials auth, token caching, and refresh
+  on rejection.
+- `KordioAgent`, `KordioWorkspace`, and `KordioCosign` for spend control, split
+  by credential so the three cannot be mixed up.
+- Signed posting amounts, validated to balance per currency before the request
+  is sent. `bigint` and decimal-string amounts; floats and unsafe integers are
+  rejected rather than truncated.
+- Authorization decisions returned as a discriminated union. A `403` denial is a
+  result, not a thrown error.
+- Cursor and `starting_after` pagination behind one auto-paginating `Page`.
+- Typed error hierarchy carrying `status`, `code`, `hint`, and `request_id`.
+- Retries with backoff and jitter on rate limits and 5xx, restricted to reads
+  and to writes carrying an idempotency key.
+- Webhook signature verification with replay tolerance, shared by both APIs.

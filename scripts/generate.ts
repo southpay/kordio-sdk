@@ -30,6 +30,7 @@ for (const spec of SPECS) {
     alphabetize: true,
     emptyObjectsUnknown: true,
     excludeDeprecated: false,
+    defaultNonNullable: false,
     additionalProperties: false,
   })
 

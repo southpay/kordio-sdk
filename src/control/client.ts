@@ -63,7 +63,7 @@ export class KordioAgent {
     const agentKey = options.agentKey ?? env('KORDIO_AGENT_KEY')
     if (!agentKey) {
       throw new TypeError(
-        'KordioAgent needs an agent key. Pass { agentKey: "krt_live_…" } or set ' +
+        'KordioAgent needs an agent key. Pass { agentKey: "krt_live_..." } or set ' +
           'KORDIO_AGENT_KEY. An agent key can ask for authorization; it can never write policy.',
       )
     }

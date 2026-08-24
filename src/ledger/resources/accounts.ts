@@ -1,9 +1,10 @@
 import type { Page } from '../../core/pagination'
 import { encodePathSegment, Resource } from '../../core/resource'
-import { toRequestOptions } from '../request'
+import { splitConfig, toRequestOptions } from '../request'
 import type {
   Account,
   AccountInput,
+  AccountStatement,
   AccountType,
   Balance,
   ListParams,
@@ -25,19 +26,16 @@ export interface AccountUpdateParams extends RequestConfig {
   metadata?: Record<string, unknown>
 }
 
-export interface StatementParams extends ListParams {
-  from?: string
-  to?: string
+export interface StatementParams extends RequestConfig {
+  from?: Date | string
+  to?: Date | string
+  limit?: number
 }
 
 export class AccountsResource extends Resource {
   async create(params: AccountInput & RequestConfig): Promise<Account> {
-    const { signal, timeoutMs, maxRetries, headers, ledgerId, ...body } = params
-    return await this.unwrap<Account>(
-      'POST',
-      '/v1/accounts',
-      toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
-    )
+    const { config, body } = splitConfig(params)
+    return await this.unwrap<Account>('POST', '/v1/accounts', toRequestOptions(config, { body }))
   }
 
   async get(id: string, config?: RequestConfig): Promise<Account> {
@@ -49,11 +47,11 @@ export class AccountsResource extends Resource {
   }
 
   async update(id: string, params: AccountUpdateParams): Promise<Account> {
-    const { signal, timeoutMs, maxRetries, headers, ledgerId, ...body } = params
+    const { config, body } = splitConfig(params)
     return await this.unwrap<Account>(
       'PATCH',
       `/v1/accounts/${encodePathSegment(id)}`,
-      toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
+      toRequestOptions(config, { body }),
     )
   }
 
@@ -61,7 +59,6 @@ export class AccountsResource extends Resource {
     const query = {
       cursor: params.cursor,
       limit: params.limit,
-      include_total: params.includeTotal,
       type: params.type,
       currency: params.currency,
       kind: params.kind,
@@ -88,18 +85,16 @@ export class AccountsResource extends Resource {
     )
   }
 
-  async statement(id: string, params: StatementParams = {}): Promise<Page<Posting>> {
+  async statement(id: string, params: StatementParams = {}): Promise<AccountStatement> {
     const query = {
-      cursor: params.cursor,
       limit: params.limit,
-      from: params.from,
-      to: params.to,
+      from: params.from instanceof Date ? params.from.toISOString() : params.from,
+      to: params.to instanceof Date ? params.to.toISOString() : params.to,
     }
-    return await this.page<Posting>(
+    return await this.unwrap<AccountStatement>(
+      'GET',
       `/v1/accounts/${encodePathSegment(id)}/statement`,
-      query,
-      'cursor',
-      toRequestOptions(params),
+      toRequestOptions(params, { query }),
     )
   }
 

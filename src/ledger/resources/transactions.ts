@@ -1,5 +1,5 @@
-import type { Query } from '../../core/http'
 import type { Page } from '../../core/pagination'
+import { compact, isoDate } from '../../core/params'
 import { encodePathSegment, extractData, Resource } from '../../core/resource'
 import { assertBalanced, KordioPostingError, normalizePostings } from '../postings'
 import { toRequestOptions } from '../request'
@@ -26,8 +26,7 @@ export interface TransactionCreateOptions extends RequestConfig {
 }
 
 export interface BulkItem {
-  idempotencyKey?: string
-  idempotency_key?: string
+  idempotencyKey: string
   postings: readonly PostingSpec[]
   metadata?: Record<string, unknown>
 }
@@ -44,6 +43,12 @@ export interface BulkResult {
   data: BulkEntry[]
 }
 
+export interface TransactionLookupParams extends RequestConfig {
+  rail: string
+  kind: string
+  value: string
+}
+
 export interface RefundParams extends IdempotentRequestConfig {
   amount?: string | number | bigint
   currency?: string
@@ -53,14 +58,9 @@ export interface RefundParams extends IdempotentRequestConfig {
 function requireIdempotencyKey(key: string | undefined, call: string): string {
   if (typeof key === 'string' && key.length > 0) return key
   throw new KordioPostingError(
-    `${call} requires an idempotency key. Pass \`idempotencyKey\` — a stable, caller-chosen ` +
-      'string (e.g. `order:1234:capture`). The same key always returns the same result, forever.',
+    `${call} requires an idempotency key. Pass \`idempotencyKey\`: a stable, caller-chosen ` +
+      'string such as `order:1234:capture`. The same key always returns the same result, forever.',
   )
-}
-
-function toIsoDate(value: Date | string | undefined): string | undefined {
-  if (value === undefined) return undefined
-  return value instanceof Date ? value.toISOString() : value
 }
 
 export class TransactionsResource extends Resource {
@@ -68,26 +68,22 @@ export class TransactionsResource extends Resource {
     const postings = normalizePostings(params.postings)
     if (params.validate !== false) assertBalanced(postings)
 
-    const idempotencyKey = params.idempotencyKey ?? params.idempotency_key
-    if (params.dryRun !== true) requireIdempotencyKey(idempotencyKey, 'transactions.create')
+    const dryRun = params.dryRun === true
+    if (!dryRun) requireIdempotencyKey(params.idempotencyKey, 'transactions.create')
 
-    const body: Record<string, unknown> = { postings }
-    if (params.metadata !== undefined) body.metadata = params.metadata
-    const valueDate = toIsoDate(params.valueDate) ?? params.value_date
-    if (valueDate !== undefined) body.value_date = valueDate
-    const bookingDate = toIsoDate(params.bookingDate) ?? params.booking_date
-    if (bookingDate !== undefined) body.booking_date = bookingDate
-    const externalRef = params.externalRef ?? params.external_ref
-    if (externalRef !== undefined) body.external_ref = externalRef
+    const body = compact({
+      postings,
+      metadata: params.metadata,
+      value_date: isoDate(params.valueDate),
+      booking_date: isoDate(params.bookingDate),
+      external_ref: params.externalRef,
+    })
 
-    const query: Query = {}
-    if (params.expand) query.expand = params.expand
-    if (params.dryRun) query.dry_run = true
-
-    const options = toRequestOptions(params, { body, query })
-    if (params.dryRun !== true && idempotencyKey) options.idempotencyKey = idempotencyKey
-
-    return await this.unwrap<Transaction>('POST', '/v1/transactions', options)
+    return await this.unwrap<Transaction>('POST', '/v1/transactions', {
+      ...toRequestOptions(params, { body }),
+      query: compact({ expand: params.expand, dry_run: dryRun || undefined }),
+      idempotencyKey: dryRun ? undefined : params.idempotencyKey,
+    })
   }
 
   async dryRun(
@@ -125,7 +121,6 @@ export class TransactionsResource extends Resource {
     const query = {
       cursor: params.cursor,
       limit: params.limit,
-      include_total: params.includeTotal,
       metadata: params.metadata,
       expand: params.expand,
     }
@@ -137,13 +132,17 @@ export class TransactionsResource extends Resource {
     )
   }
 
-  async lookup(
-    params: RequestConfig & { idempotencyKey?: string; externalRef?: string },
-  ): Promise<Transaction> {
-    const query = {
-      idempotency_key: params.idempotencyKey,
-      external_ref: params.externalRef,
+  async lookup(params: TransactionLookupParams): Promise<Transaction> {
+    for (const field of ['rail', 'kind', 'value'] as const) {
+      if (!params[field]) {
+        throw new KordioPostingError(
+          'transactions.lookup needs all three of rail, kind and value, the external ' +
+            'reference tuple that identifies the event, such as ' +
+            `{ rail: 'ethereum', kind: 'tx_hash', value: '0xabc...' }. Missing: ${field}.`,
+        )
+      }
     }
+    const query = { rail: params.rail, kind: params.kind, value: params.value }
     return await this.unwrap<Transaction>(
       'GET',
       '/v1/transactions/lookup',
@@ -157,16 +156,14 @@ export class TransactionsResource extends Resource {
     const items = params.transactions.map((item, index) => {
       const postings = normalizePostings(item.postings)
       if (params.validate !== false) assertBalanced(postings)
-      const key = item.idempotencyKey ?? item.idempotency_key
+      const key = item.idempotencyKey
       if (!key) {
         throw new KordioPostingError(
           `transactions[${index}] needs its own \`idempotencyKey\`. ` +
             'The Idempotency-Key header is ignored on bulk writes.',
         )
       }
-      const entry: Record<string, unknown> = { idempotency_key: key, postings }
-      if (item.metadata !== undefined) entry.metadata = item.metadata
-      return entry
+      return compact({ idempotency_key: key, postings, metadata: item.metadata })
     })
 
     const response = await this.raw<BulkResult>(
@@ -197,10 +194,11 @@ export class TransactionsResource extends Resource {
 
   async refund(id: string, params: RefundParams): Promise<Transaction> {
     const key = requireIdempotencyKey(params.idempotencyKey, 'transactions.refund')
-    const body: Record<string, unknown> = {}
-    if (params.amount !== undefined) body.amount = String(params.amount)
-    if (params.currency !== undefined) body.currency = params.currency
-    if (params.metadata !== undefined) body.metadata = params.metadata
+    const body = compact({
+      amount: params.amount === undefined ? undefined : String(params.amount),
+      currency: params.currency,
+      metadata: params.metadata,
+    })
     return await this.unwrap<Transaction>(
       'POST',
       `/v1/transactions/${encodePathSegment(id)}/refund`,

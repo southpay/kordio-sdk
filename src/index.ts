@@ -48,9 +48,16 @@ export { KordioLedger, type KordioLedgerOptions } from './ledger/client'
 export { KordioPostingError } from './ledger/postings'
 export type {
   Account,
+  AccountStatement,
   Balance,
+  BalanceSheetReport,
+  Capabilities,
+  IncomeStatementReport,
+  Ledger,
+  Organization,
   Posting,
   PostingSpec,
   Transaction,
   TransactionCreateParams,
+  TrialBalanceReport,
 } from './ledger/types'

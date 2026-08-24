@@ -2,19 +2,43 @@
   "name": "@kordio/sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for the Kordio ledger and spend control APIs.",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "homepage": "https://docs.kordio.io",
-  "repository": { "type": "git", "url": "git+https://github.com/trykordio/kordio-sdk.git" },
-  "bugs": { "url": "https://github.com/trykordio/kordio-sdk/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trykordio/kordio-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trykordio/kordio-sdk/issues"
+  },
   "type": "module",
   "sideEffects": false,
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "packageManager": "bun@1.3.8",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "require": "./dist/index.cjs" },
-    "./ledger": { "types": "./dist/ledger/index.d.ts", "import": "./dist/ledger/index.js", "require": "./dist/ledger/index.cjs" },
-    "./control": { "types": "./dist/control/index.d.ts", "import": "./dist/control/index.js", "require": "./dist/control/index.cjs" },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./ledger": {
+      "types": "./dist/ledger/index.d.ts",
+      "import": "./dist/ledger/index.js",
+      "require": "./dist/ledger/index.cjs"
+    },
+    "./control": {
+      "types": "./dist/control/index.d.ts",
+      "import": "./dist/control/index.js",
+      "require": "./dist/control/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
@@ -25,6 +49,7 @@
     "generate": "bun scripts/generate.ts",
     "check:generated": "bun scripts/generate.ts --check",
     "check:coverage": "bun scripts/check-coverage.ts",
+    "validate:live": "bun scripts/validate-live.ts",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
@@ -34,7 +59,15 @@
     "verify": "bun run check:generated && bun run check:coverage && bun run typecheck && bun run test && bun run check && bun run build",
     "prepublishOnly": "bun run verify"
   },
-  "keywords": ["kordio", "ledger", "double-entry", "accounting", "agents", "spend-control", "ai-agents"],
+  "keywords": [
+    "kordio",
+    "ledger",
+    "double-entry",
+    "accounting",
+    "agents",
+    "spend-control",
+    "ai-agents"
+  ],
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
     "@types/bun": "^1.3.8",
@@ -42,5 +75,10 @@
     "tsup": "^8.5.0",
     "typescript": "^5.7.2",
     "yaml": "^2.8.1"
-  }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "author": "SouthPay LLC"
 }

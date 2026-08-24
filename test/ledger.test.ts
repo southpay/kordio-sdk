@@ -271,3 +271,78 @@ describe('path encoding', () => {
     expect(server.last().url).toBe('https://api.test/v1/accounts/accounts_payable:onchain%2Facme')
   })
 })
+
+describe('contract details the live API taught us', () => {
+  test('creating an account needs only id, name, type and currency', async () => {
+    const server = mockFetch([{ status: 201, body: ledgerEnvelope({ object: 'account' }) }])
+    await client(server).accounts.create({
+      id: 'cash:usd',
+      name: 'Operating cash',
+      type: 'asset',
+      currency: 'USDC',
+    })
+    expect(server.last().body).toEqual({
+      id: 'cash:usd',
+      name: 'Operating cash',
+      type: 'asset',
+      currency: 'USDC',
+    })
+  })
+
+  test('lookup sends the rail/kind/value tuple the API actually wants', async () => {
+    const server = mockFetch([{ body: ledgerEnvelope({ object: 'transaction', id: 'tx_1' }) }])
+    await client(server).transactions.lookup({
+      rail: 'ethereum',
+      kind: 'tx_hash',
+      value: '0xabc123',
+    })
+    const url = new URL(server.last().url)
+    expect(url.pathname).toBe('/v1/transactions/lookup')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      rail: 'ethereum',
+      kind: 'tx_hash',
+      value: '0xabc123',
+    })
+  })
+
+  test('lookup names the missing part of the tuple before spending a round trip', async () => {
+    const server = mockFetch([{ body: ledgerEnvelope({}) }])
+    await expect(
+      (client(server).transactions.lookup as unknown as (p: unknown) => Promise<unknown>)({
+        rail: 'ethereum',
+        kind: 'tx_hash',
+      }),
+    ).rejects.toThrow(/Missing: value/)
+    expect(server.requests).toHaveLength(0)
+  })
+
+  test('statement is a statement object, not a page of postings', async () => {
+    const server = mockFetch([
+      {
+        body: ledgerEnvelope({
+          object: 'account_statement',
+          account: 'cash:usd',
+          currency: 'USDC',
+          period: { from: null, to: '2026-08-24T00:00:00Z' },
+          opening_balance: { posted: '0', pending: '0', currency: 'USDC' },
+          closing_balance: { posted: '10000000', pending: '0', currency: 'USDC' },
+          entries: [{ object: 'posting', id: 1 }],
+          entry_count: 1,
+          truncated: false,
+        }),
+      },
+    ])
+    const statement = await client(server).accounts.statement('cash:usd', { limit: 50 })
+    expect(statement.object).toBe('account_statement')
+    expect(statement.closing_balance.posted).toBe('10000000')
+    expect(statement.entries).toHaveLength(1)
+    expect(server.last().url).toContain('limit=50')
+    expect(server.last().url).not.toContain('cursor')
+  })
+
+  test('list calls do not send include_total, which the API ignores', async () => {
+    const server = mockFetch([{ body: ledgerList([]) }])
+    await client(server).accounts.list({ limit: 5 })
+    expect(server.last().url).not.toContain('include_total')
+  })
+})

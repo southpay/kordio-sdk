@@ -1,5 +1,17 @@
 import type { Query, RequestOptions } from '../core/http'
-import type { IdempotentRequestConfig, RequestConfig } from './types'
+import type { RequestConfig } from './types'
+
+const CONFIG_KEYS = [
+  'signal',
+  'timeoutMs',
+  'maxRetries',
+  'headers',
+  'ledgerId',
+  'idempotencyKey',
+  'validate',
+] as const
+
+type ConfigKey = (typeof CONFIG_KEYS)[number]
 
 export function toRequestOptions(
   config: RequestConfig | undefined,
@@ -8,39 +20,21 @@ export function toRequestOptions(
   const headers: Record<string, string> = { ...config?.headers }
   if (config?.ledgerId) headers['x-ledger-id'] = config.ledgerId
 
-  const options: RequestOptions = {
-    headers,
-    ...extra,
-  }
+  const options: RequestOptions = { headers, ...extra }
   if (config?.signal) options.signal = config.signal
   if (config?.timeoutMs !== undefined) options.timeoutMs = config.timeoutMs
   if (config?.maxRetries !== undefined) options.maxRetries = config.maxRetries
   return options
 }
 
-export function idempotencyKeyOf(
-  config: IdempotentRequestConfig | undefined,
-  inline: string | undefined,
-): string | undefined {
-  return config?.idempotencyKey ?? inline
-}
-
-export function splitConfig<T extends Record<string, unknown>>(
-  params: T | undefined,
-  configKeys: readonly string[] = [
-    'signal',
-    'timeoutMs',
-    'maxRetries',
-    'headers',
-    'ledgerId',
-    'idempotencyKey',
-  ],
-): { config: RequestConfig & { idempotencyKey?: string }; rest: Record<string, unknown> } {
+export function splitConfig<T extends RequestConfig>(
+  params: T,
+): { config: RequestConfig; body: Omit<T, ConfigKey> } {
   const config: Record<string, unknown> = {}
-  const rest: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(params ?? {})) {
-    if (configKeys.includes(key)) config[key] = value
-    else rest[key] = value
+  const body: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(params)) {
+    if ((CONFIG_KEYS as readonly string[]).includes(key)) config[key] = value
+    else body[key] = value
   }
-  return { config: config as RequestConfig & { idempotencyKey?: string }, rest }
+  return { config: config as RequestConfig, body: body as Omit<T, ConfigKey> }
 }

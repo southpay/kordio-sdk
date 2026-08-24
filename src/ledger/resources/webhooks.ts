@@ -1,6 +1,6 @@
 import type { Page } from '../../core/pagination'
 import { encodePathSegment, Resource } from '../../core/resource'
-import { toRequestOptions } from '../request'
+import { splitConfig, toRequestOptions } from '../request'
 import type {
   IdempotentRequestConfig,
   ListParams,
@@ -23,11 +23,11 @@ export interface DeliveryListParams extends ListParams {
 
 export class WebhookEndpointsResource extends Resource {
   async create(params: WebhookEndpointInput & RequestConfig): Promise<WebhookEndpoint> {
-    const { signal, timeoutMs, maxRetries, headers, ledgerId, ...body } = params
+    const { config, body } = splitConfig(params)
     return await this.unwrap<WebhookEndpoint>(
       'POST',
       '/v1/webhook_endpoints',
-      toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
+      toRequestOptions(config, { body }),
     )
   }
 
@@ -49,11 +49,11 @@ export class WebhookEndpointsResource extends Resource {
   }
 
   async update(id: string, params: WebhookEndpointUpdateParams): Promise<WebhookEndpoint> {
-    const { signal, timeoutMs, maxRetries, headers, ledgerId, ...body } = params
+    const { config, body } = splitConfig(params)
     return await this.unwrap<WebhookEndpoint>(
       'PATCH',
       `/v1/webhook_endpoints/${encodePathSegment(id)}`,
-      toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
+      toRequestOptions(config, { body }),
     )
   }
 

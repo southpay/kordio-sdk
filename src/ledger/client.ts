@@ -22,6 +22,7 @@ import { ReportsResource } from './resources/reports'
 import { ReservesResource } from './resources/reserves'
 import { TransactionsResource } from './resources/transactions'
 import { WebhookDeliveriesResource, WebhookEndpointsResource } from './resources/webhooks'
+import type { Capabilities } from './types'
 
 export const DEFAULT_BASE_URL = 'https://api.kordio.io'
 
@@ -36,6 +37,7 @@ export interface KordioLedgerOptions {
   timeoutMs?: number
   maxRetries?: number
   auth?: AuthProvider
+  tokenUrl?: string
   userAgentSuffix?: string
 }
 
@@ -57,6 +59,7 @@ function resolveAuth(options: KordioLedgerOptions, baseUrl: string): AuthProvide
       clientSecret,
       scope: options.scope,
       baseUrl,
+      tokenUrl: options.tokenUrl ?? env('KORDIO_TOKEN_URL'),
       fetch: options.fetch,
     })
   }
@@ -144,10 +147,13 @@ export class KordioLedger {
     return await this.transport.request<T>(method, path, options)
   }
 
-  async capabilities<T = unknown>(): Promise<T> {
-    const response = await this.transport.request<{ data?: T }>('GET', '/v1/_meta/capabilities')
+  async capabilities(): Promise<Capabilities> {
+    const response = await this.transport.request<{ data?: Capabilities }>(
+      'GET',
+      '/v1/_meta/capabilities',
+    )
     const body = response.data
-    return (body && typeof body === 'object' && 'data' in body ? body.data : body) as T
+    return (body && typeof body === 'object' && 'data' in body ? body.data : body) as Capabilities
   }
 
   async health(): Promise<HttpResponse<unknown>> {

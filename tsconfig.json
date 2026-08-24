@@ -13,6 +13,12 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@kordio/sdk": ["./src/index.ts"],
+      "@kordio/sdk/ledger": ["./src/ledger/index.ts"],
+      "@kordio/sdk/control": ["./src/control/index.ts"]
+    },
     "declaration": true,
     "noEmit": true,
     "types": ["bun"]

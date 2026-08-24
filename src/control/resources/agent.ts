@@ -1,6 +1,7 @@
+import { compact, isoDate } from '../../core/params'
 import { encodePathSegment, Resource } from '../../core/resource'
 import { DECISION_EXPECTED_STATUSES, type DecisionEnvelope, toDecisionResult } from '../decision'
-import { iso, omitUndefined, toRequestOptions } from '../request'
+import { toRequestOptions } from '../request'
 import type {
   ActionIntent,
   ActionParams,
@@ -26,7 +27,7 @@ function requireIdempotencyKey(key: string | undefined, call: string): string {
 export class ActionsResource extends Resource {
   async authorize(params: ActionParams): Promise<ActionResult> {
     const key = requireIdempotencyKey(params.idempotencyKey, 'actions.authorize')
-    const body = omitUndefined({
+    const body = compact({
       budget_id: params.budgetId,
       action_type: params.actionType,
       resource: params.resource,
@@ -45,7 +46,7 @@ export class ActionsResource extends Resource {
   }
 
   async simulate(params: Omit<ActionParams, 'idempotencyKey'>): Promise<ActionResult> {
-    const body = omitUndefined({
+    const body = compact({
       budget_id: params.budgetId,
       action_type: params.actionType,
       resource: params.resource,
@@ -87,14 +88,14 @@ export class ActionsResource extends Resource {
     return await this.unwrap<ActionIntent>(
       'POST',
       `/v1/agent/actions/${encodePathSegment(id)}/fail`,
-      toRequestOptions(params, { body: omitUndefined({ reason: params.reason }) }),
+      toRequestOptions(params, { body: compact({ reason: params.reason }) }),
     )
   }
 }
 
 export class AgentBudgetsResource extends Resource {
   async create(params: BudgetParams): Promise<Budget> {
-    const body = omitUndefined({
+    const body = compact({
       budget_cents: params.budgetCents,
       currency: params.currency,
       parent_budget_id: params.parentBudgetId,
@@ -117,11 +118,11 @@ export class AgentBudgetsResource extends Resource {
 
 export class AgentSpendTokensResource extends Resource {
   async create(params: SpendTokenParams): Promise<SpendToken> {
-    const body = omitUndefined({
+    const body = compact({
       budget_id: params.budgetId,
       amount_ceiling_cents: params.amountCeilingCents,
       counterparty: params.counterparty,
-      expires_at: iso(params.expiresAt),
+      expires_at: isoDate(params.expiresAt),
     })
     return await this.unwrap<SpendToken>(
       'POST',
@@ -134,7 +135,7 @@ export class AgentSpendTokensResource extends Resource {
 export class AgentPaymentIntentsResource extends Resource {
   async authorize(params: PaymentParams): Promise<PaymentResult> {
     const key = requireIdempotencyKey(params.idempotencyKey, 'paymentIntents.authorize')
-    const body = omitUndefined({
+    const body = compact({
       budget_id: params.budgetId,
       amount_cents: params.amountCents,
       idempotency_key: key,
@@ -161,7 +162,7 @@ export class AgentPaymentIntentsResource extends Resource {
   async simulate(
     params: Omit<PaymentParams, 'idempotencyKey' | 'spendTokenId' | 'decisionContext' | 'metadata'>,
   ): Promise<PaymentResult> {
-    const body = omitUndefined({
+    const body = compact({
       budget_id: params.budgetId,
       amount_cents: params.amountCents,
       counterparty: params.counterparty,
@@ -201,7 +202,7 @@ export class AgentPaymentIntentsResource extends Resource {
     return await this.unwrap<PaymentIntent>(
       'POST',
       `/v1/agent/payment_intents/${encodePathSegment(id)}/fail`,
-      toRequestOptions(params, { body: omitUndefined({ reason: params.reason }) }),
+      toRequestOptions(params, { body: compact({ reason: params.reason }) }),
     )
   }
 }

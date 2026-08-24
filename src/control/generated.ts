@@ -1373,7 +1373,7 @@ export interface components {
              * @description Minor units. Omit or `0` for an action that spends nothing.
              * @default 0
              */
-            cost_cents: number;
+            cost_cents?: number;
             /** @description Any dot path here is addressable from the condition language as `metadata.*`. */
             metadata?: {
                 [key: string]: unknown;
@@ -1694,7 +1694,7 @@ export interface components {
              * @default blocklist
              * @enum {string}
              */
-            mode: "blocklist" | "allowlist";
+            mode?: "blocklist" | "allowlist";
             monthly_cap_cents?: number | null;
             per_transaction_cap_cents?: number | null;
             rules?: components["schemas"]["PolicyRule"][];
@@ -1724,7 +1724,7 @@ export interface components {
              * @default deny
              * @enum {string}
              */
-            effect: "allow" | "deny" | "require_approval";
+            effect?: "allow" | "deny" | "require_approval";
             /** Format: uuid */
             id?: string;
             /** @enum {string} */
@@ -1749,7 +1749,7 @@ export interface components {
              * @default active
              * @enum {string}
              */
-            status: "active" | "disabled";
+            status?: "active" | "disabled";
         } & components["schemas"]["PolicyDraft"];
         /**
          * @description `owner` carries read, approve, manage_policy and manage_members. `admin` carries read, approve and manage_policy. `member` carries read.

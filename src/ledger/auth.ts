@@ -23,13 +23,21 @@ export interface CachedToken {
 export interface OAuthAuthProviderConfig extends OAuthCredentials {
   baseUrl: string
   fetch?: FetchLike
-  tokenPath?: string
+  tokenUrl?: string
   expirySkewSeconds?: number
   onToken?: (token: CachedToken) => void
 }
 
 const DEFAULT_TOKEN_PATH = '/oauth/token'
 const DEFAULT_SKEW_SECONDS = 60
+
+export function defaultTokenUrl(baseUrl: string): string {
+  try {
+    return new URL(DEFAULT_TOKEN_PATH, baseUrl).toString()
+  } catch {
+    return `${baseUrl}${DEFAULT_TOKEN_PATH}`
+  }
+}
 
 function base64(value: string): string {
   if (typeof btoa === 'function') {
@@ -79,8 +87,12 @@ export class OAuthAuthProvider implements AuthProvider {
     this.cached = null
   }
 
+  get tokenUrl(): string {
+    return this.config.tokenUrl ?? defaultTokenUrl(this.config.baseUrl)
+  }
+
   private async fetchToken(): Promise<CachedToken> {
-    const url = `${this.config.baseUrl}${this.config.tokenPath ?? DEFAULT_TOKEN_PATH}`
+    const url = this.tokenUrl
     const scope = Array.isArray(this.config.scope)
       ? this.config.scope.join(' ')
       : (this.config.scope as string | undefined)
@@ -116,7 +128,7 @@ export class OAuthAuthProvider implements AuthProvider {
           oauthError?.error_description ?? `token request failed with HTTP ${response.status}`,
         hint: 'Check KORDIO_CLIENT_ID / KORDIO_CLIENT_SECRET and that the client is enabled.',
         method: 'POST',
-        path: this.config.tokenPath ?? DEFAULT_TOKEN_PATH,
+        path: url,
         body,
       })
     }
@@ -129,7 +141,7 @@ export class OAuthAuthProvider implements AuthProvider {
         code: 'invalid_grant',
         message: 'token endpoint returned no access_token',
         method: 'POST',
-        path: this.config.tokenPath ?? DEFAULT_TOKEN_PATH,
+        path: url,
         body,
       })
     }

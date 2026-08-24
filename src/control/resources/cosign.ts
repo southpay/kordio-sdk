@@ -1,6 +1,7 @@
 import { buildError } from '../../core/errors'
+import { compact } from '../../core/params'
 import { Resource } from '../../core/resource'
-import { omitUndefined, toRequestOptions } from '../request'
+import { toRequestOptions } from '../request'
 import type { CosignatureInvalid, CosignatureValid, RequestConfig } from '../types'
 
 export type CosignatureCheck =
@@ -27,7 +28,7 @@ export class CosignResource extends Resource {
     payload: Record<string, unknown>,
   ): Promise<CosignatureCheck> {
     const response = await this.raw<{ data?: CosignatureCheck }>('POST', path, {
-      ...toRequestOptions(config, { body: omitUndefined(payload) }),
+      ...toRequestOptions(config, { body: compact(payload) }),
       expectedStatuses: [200, 401, 422],
     })
     const data = response.data?.data

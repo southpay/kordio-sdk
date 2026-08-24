@@ -142,3 +142,37 @@ describe('OAuth client credentials', () => {
     expect(issued).toBe(1)
   })
 })
+
+describe('token endpoint location', () => {
+  test('the token endpoint is resolved against the host, not the API path prefix', async () => {
+    const t = tracker((call) =>
+      call.url.includes('/oauth/token')
+        ? json({ access_token: 'tok', token_type: 'Bearer', expires_in: 3600 })
+        : json(ledgerEnvelope({ object: 'account' })),
+    )
+    const kordio = new KordioLedger({
+      clientId: 'c',
+      clientSecret: 's',
+      baseUrl: 'http://localhost:4000/api',
+      fetch: t.fetch,
+    })
+
+    await kordio.accounts.get('cash:usd')
+
+    expect(t.calls[0]?.url).toBe('http://localhost:4000/oauth/token')
+    expect(t.calls[1]?.url).toBe('http://localhost:4000/api/v1/accounts/cash:usd')
+  })
+
+  test('an explicit tokenUrl wins', async () => {
+    const t = tracker(() => json({ access_token: 'tok', token_type: 'Bearer', expires_in: 3600 }))
+    const provider = new OAuthAuthProvider({
+      clientId: 'c',
+      clientSecret: 's',
+      baseUrl: 'https://api.kordio.io',
+      tokenUrl: 'https://auth.internal/token',
+      fetch: t.fetch,
+    })
+    await provider.headers({ forceRefresh: false })
+    expect(t.calls[0]?.url).toBe('https://auth.internal/token')
+  })
+})

@@ -2,16 +2,17 @@
 
 TypeScript SDK for the two Kordio APIs:
 
-- **Ledger** — a double-entry ledger you call over HTTP. `KordioLedger`.
-- **Spend control** — decides whether an AI agent may take an action before it takes it, and signs the answer. `KordioAgent` and `KordioWorkspace`.
+`KordioLedger` talks to the ledger, a double-entry book you call over HTTP.
 
-They share a host and nothing else: different credentials, different envelopes, different pagination. This package gives each one its own client so you cannot accidentally cross the wires.
+`KordioAgent` and `KordioWorkspace` talk to spend control, which decides whether an AI agent may take an action before it takes it and signs the answer.
+
+The two APIs share a host and very little else. Their credentials, response envelopes and pagination all differ, so this package gives each one its own client rather than one object that can reach both.
 
 ```bash
 npm install @kordio/sdk
 ```
 
-Node 18+, Bun, Deno, Cloudflare Workers, and browsers. No runtime dependencies — `fetch` and Web Crypto only.
+Runs on Node 18+, Bun, Deno, Cloudflare Workers and browsers. There are no runtime dependencies; it uses `fetch` and Web Crypto.
 
 ---
 
@@ -27,7 +28,9 @@ const kordio = new KordioLedger({
 })
 ```
 
-The SDK mints an OAuth token from those credentials, caches it, and refreshes it when it expires or is rejected. Pass `accessToken` instead if you mint tokens yourself. With no options it reads `KORDIO_CLIENT_ID` / `KORDIO_CLIENT_SECRET` / `KORDIO_TOKEN` / `KORDIO_LEDGER_ID` from the environment.
+The SDK mints an OAuth token from those credentials, caches it, and refreshes it when it expires or is rejected. Pass `accessToken` instead if you mint tokens yourself. With no options it reads `KORDIO_CLIENT_ID`, `KORDIO_CLIENT_SECRET`, `KORDIO_TOKEN` and `KORDIO_LEDGER_ID` from the environment.
+
+Set `ledgerId` even though it is optional. The server resolves the ledger from the token's `ledger_id` claim, then the `X-Ledger-Id` header the SDK sends for you, and if it gets neither it falls back to the default ledger for the token's mode. A client credential registered as `test` can only ever reach test ledgers, so that fallback cannot cross into live data, but on a tenant with several test ledgers it will quietly pick one for you. `kordio.ledgers.list()` shows which ones exist.
 
 ### Writing a transaction
 
@@ -42,7 +45,7 @@ await kordio.transactions.create({
 })
 ```
 
-**Positive is a debit, negative is a credit.** The SDK converts signed amounts into the `direction` + positive-magnitude shape the API expects, and checks the postings balance per currency before spending a round trip. If you prefer the wire form, write it directly — both are accepted:
+Positive is a debit, negative is a credit. The SDK converts signed amounts into the `direction` plus positive-magnitude shape the API expects, and checks that the postings balance per currency before spending a round trip. If you prefer the wire form, write it directly. Both are accepted:
 
 ```ts
 postings: [
@@ -51,7 +54,7 @@ postings: [
 ]
 ```
 
-Amounts take a `bigint`, a safe integer, or a decimal string of minor units. Floats are rejected rather than silently truncated, and values past `Number.MAX_SAFE_INTEGER` are rejected unless you pass a `bigint` or string — an 18-decimal token amount will not quietly lose precision.
+Amounts take a `bigint`, a safe integer, or a decimal string of minor units. Floats are rejected rather than silently truncated. So are values past `Number.MAX_SAFE_INTEGER`, unless you pass them as a `bigint` or a string, which is what keeps an 18-decimal token amount from losing precision on the way out.
 
 `idempotencyKey` is required on writes and is yours to choose. The same key returns the same transaction forever, so make it derive from the thing you are recording (`order:4471:capture`), not from a random per-attempt value.
 
@@ -69,13 +72,40 @@ const balance = await kordio.balances.get(acc(account.id))
 
 `kordio.accounts.balance(id)` is the same call if you prefer the shape to mirror the URL, and `kordio.balances.category(id)` rolls up an account's whole category.
 
-Balances come back as signed decimal strings — `posted`, `pending`, `available`. Parse them with `BigInt`, never `Number`:
+Balances come back as decimal strings in `posted`, `pending` and `available`. Parse them with `BigInt`, never `Number`:
 
 ```ts
 import { formatMinorUnits } from '@kordio/sdk'
 
 const available = BigInt(balance.available)
 formatMinorUnits(available, 6)
+```
+
+A balance is signed by the account's **natural balance**, not by debit-minus-credit. Debiting an asset and crediting a liability both read positive. An asset with a negative balance is overdrawn; a liability with a negative balance has been overpaid.
+
+To find a transaction you may have already booked from an external event, look it up by its reference tuple. All three parts are required:
+
+```ts
+const existing = await kordio.transactions.lookup({
+  rail: 'ethereum',
+  kind: 'tx_hash',
+  value: '0xabc123...',
+})
+```
+
+### Statements
+
+`accounts.statement(id)` returns the auditor's view of one account: an opening balance, every posting in the period ordered by value date, then a closing balance. It is a single object rather than a paginated list.
+
+```ts
+const statement = await kordio.accounts.statement('cash:usd', {
+  from: new Date('2026-04-01'),
+  to: new Date('2026-05-01'),
+})
+
+statement.opening_balance.posted
+statement.entries.length
+statement.truncated
 ```
 
 ### Lists
@@ -92,7 +122,7 @@ Or take one page at a time with `page.data`, `page.hasMore`, `page.nextPage()`, 
 
 ### The rest
 
-`accounts`, `transactions`, `postings`, `reserves`, `events`, `reports`, `sources`, `reconciliationRuns`, `externalTransactions`, `periodCloses`, `accountTemplates`, `exports`, `webhookEndpoints`, `webhookDeliveries`, `oauthClients`, `ledgers`, `organizations`.
+`accounts`, `balances`, `transactions`, `postings`, `reserves`, `events`, `reports`, `sources`, `reconciliationRuns`, `externalTransactions`, `periodCloses`, `accountTemplates`, `exports`, `webhookEndpoints`, `webhookDeliveries`, `oauthClients`, `ledgers`, `organizations`.
 
 ---
 
@@ -102,7 +132,7 @@ Two credentials that are deliberately not interchangeable, so two clients.
 
 ### The agent
 
-An agent key (`krt_live_…`) asks for authorization. It can never write policy.
+An agent key (`krt_live_...`) asks for authorization. It can never write policy.
 
 ```ts
 import { KordioAgent } from '@kordio/sdk/control'
@@ -120,7 +150,7 @@ const decision = await kordio.actions.authorize({
 })
 ```
 
-**A denial is a result, not an exception.** The API answers `201`, `202` or `403` and all three are real answers, so the SDK returns a discriminated union rather than throwing on the refusal:
+A denial is a result, not an exception. The API answers `201`, `202` or `403`, and all three are real answers, so the SDK returns a discriminated union instead of throwing on the refusal:
 
 ```ts
 switch (decision.outcome) {
@@ -137,13 +167,13 @@ switch (decision.outcome) {
 }
 ```
 
-Genuine failures — a bad key, a rate limit, a server error — still throw.
+Genuine failures still throw. A bad key, a rate limit and a server error are all exceptions.
 
 `decision.headroom` is what is left on every limit that applied. Give it to your agent: one that knows it has $380 left picks a cheaper vendor; one that only knows it was refused retries into the same wall.
 
 If you would rather have an exception, `assertAllowed(decision)` narrows the union and throws `KordioDeniedError` otherwise.
 
-Reporting the outcome is not optional. An intent left pending holds its budget until the budget closes — call `actions.complete(id)` or `actions.fail(id, { reason })`.
+Reporting the outcome is not optional. An intent left pending holds its budget until the budget closes, so call `actions.complete(id)` or `actions.fail(id, { reason })` once you know.
 
 Also on the agent client: `spendTokens.create(...)` to mint a single-use ceiling, and `paymentIntents.authorize(...)` for payments. Note the asymmetry the API documents: payment intents carry their idempotency key in the body, actions carry it in a header. The SDK takes `idempotencyKey` in both cases and puts it where it belongs.
 
@@ -226,7 +256,7 @@ try {
 
 Subclasses: `KordioAuthenticationError`, `KordioPermissionError`, `KordioNotFoundError`, `KordioConflictError`, `KordioValidationError`, `KordioUnbalancedError`, `KordioIdempotencyConflictError`, `KordioRateLimitError`, `KordioServerError`, `KordioConnectionError`, `KordioTimeoutError`.
 
-Rate limits and 5xx are retried with exponential backoff and jitter, honouring `Retry-After`. **Only reads and writes carrying an idempotency key are ever retried** — a write without one is sent exactly once. A rejected token is refreshed and the call retried once.
+Rate limits and 5xx responses are retried with exponential backoff and jitter, honouring `Retry-After`. Only reads and writes carrying an idempotency key are ever retried; a write without one is sent exactly once. A rejected token is refreshed and the call retried once.
 
 Tune with `timeoutMs` and `maxRetries` on the client or per call, and cancel with a standard `AbortSignal`.
 
@@ -251,6 +281,27 @@ response.rateLimit.remaining
 ## Casing
 
 Requests take camelCase for the fields the SDK models (`idempotencyKey`, `accountId`, `budgetId`, `costCents`). **Responses are returned exactly as the API sends them, in snake_case.** That is deliberate: response types are generated from the OpenAPI specs, so they cannot drift from the API, and no key-rewriting pass can corrupt free-form `metadata`, `tags`, `detail` or `headroom` maps whose keys are your data.
+
+## Validating against a real API
+
+Unit tests run against a mock. To check the SDK against a live ledger:
+
+```bash
+export KORDIO_CLIENT_ID=... KORDIO_CLIENT_SECRET=...
+export KORDIO_BASE_URL=http://localhost:4000/api   # omit for production
+bun run validate:live
+```
+
+It creates throwaway accounts, writes and reverses a transaction, ingests external transactions for a reconciliation pass, and asserts the balances land where double-entry says they should. Point it at a **test-mode** ledger; it writes real data. Set `KORDIO_AGENT_KEY` to also exercise budgets and authorization decisions, and `KORDIO_LEDGER_ID` to pin the ledger instead of letting it pick the first test-mode one.
+
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](./CONTRIBUTING.md) has
+the setup, and `bun run verify` is the whole gate. Security reports go to
+security@kordio.io rather than the issue tracker; see
+[SECURITY.md](./SECURITY.md).
+
+MIT licensed.
 
 ## Maintaining
 

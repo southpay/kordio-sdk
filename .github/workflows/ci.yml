@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -14,9 +17,47 @@ jobs:
         with:
           bun-version: 1.3.8
       - run: bun install --frozen-lockfile
-      - run: bun run check:generated
-      - run: bun run check:coverage
+      - name: Generated types match the specs
+        run: bun run check:generated
+      - name: Every operation is reachable
+        run: bun run check:coverage
       - run: bun run typecheck
       - run: bun test
-      - run: bun run check
+      - name: Biome (lint and format)
+        run: bun run check
       - run: bun run build
+
+  node:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Import the built package on Node
+        run: |
+          node --input-type=module -e "
+            import { KordioLedger } from './dist/ledger/index.js'
+            import { KordioAgent } from './dist/control/index.js'
+            import { verifyWebhookSignature } from './dist/index.js'
+            if (typeof KordioLedger !== 'function') throw new Error('esm export missing')
+            if (typeof KordioAgent !== 'function') throw new Error('esm export missing')
+            if (typeof verifyWebhookSignature !== 'function') throw new Error('esm export missing')
+            console.log('esm ok')
+          "
+          node -e "
+            const { KordioLedger } = require('./dist/ledger/index.cjs')
+            if (typeof KordioLedger !== 'function') throw new Error('cjs export missing')
+            console.log('cjs ok')
+          "

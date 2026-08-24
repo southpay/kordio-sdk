@@ -1,7 +1,17 @@
 import type { Page } from '../../core/pagination'
+import { compact, isoDate } from '../../core/params'
 import { encodePathSegment, Resource } from '../../core/resource'
-import { toRequestOptions } from '../request'
-import type { ListParams, RequestConfig } from '../types'
+import { splitConfig, toRequestOptions } from '../request'
+import type {
+  ExternalTransaction,
+  InboundEndpoint,
+  IngestResult,
+  ListParams,
+  ReconciliationMatch,
+  ReconciliationRun,
+  RequestConfig,
+  Source,
+} from '../types'
 
 export interface SourceInput {
   name: string
@@ -15,13 +25,15 @@ export interface SourceInput {
 }
 
 export interface ExternalTransactionItem {
-  external_reference: string
+  external_id: string
   amount: string | number
   currency: string
   occurred_at?: string
-  account?: string
-  metadata?: Record<string, unknown>
-  [key: string]: unknown
+  account_id?: string
+  reference_rail?: string
+  reference_kind?: string
+  reference_value?: string
+  raw?: Record<string, unknown>
 }
 
 export interface RunInput {
@@ -42,69 +54,60 @@ export interface ExternalTransactionListParams extends ListParams {
   to?: Date | string
 }
 
-function iso(value: Date | string | undefined): string | undefined {
-  if (value === undefined) return undefined
-  return value instanceof Date ? value.toISOString() : value
-}
-
 export class SourcesResource extends Resource {
-  async create<T = unknown>(params: SourceInput & RequestConfig): Promise<T> {
-    const { signal, timeoutMs, maxRetries, headers, ledgerId, ...body } = params
-    return await this.unwrap<T>(
-      'POST',
-      '/v1/sources',
-      toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
-    )
+  async create(params: SourceInput & RequestConfig): Promise<Source> {
+    const { config, body } = splitConfig(params)
+    return await this.unwrap<Source>('POST', '/v1/sources', toRequestOptions(config, { body }))
   }
 
-  async list<T = unknown>(params: ListParams = {}): Promise<Page<T>> {
-    return await this.page<T>('/v1/sources', {}, 'cursor', toRequestOptions(params))
+  async list(params: ListParams = {}): Promise<Page<Source>> {
+    return await this.page<Source>('/v1/sources', {}, 'cursor', toRequestOptions(params))
   }
 
-  async get<T = unknown>(id: string, config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>(
+  async get(id: string, config?: RequestConfig): Promise<Source> {
+    return await this.unwrap<Source>(
       'GET',
       `/v1/sources/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
 
-  async update<T = unknown>(id: string, params: Partial<SourceInput> & RequestConfig): Promise<T> {
-    const { signal, timeoutMs, maxRetries, headers, ledgerId, ...body } = params
-    return await this.unwrap<T>(
+  async update(id: string, params: Partial<SourceInput> & RequestConfig): Promise<Source> {
+    const { config, body } = splitConfig(params)
+    return await this.unwrap<Source>(
       'PATCH',
       `/v1/sources/${encodePathSegment(id)}`,
-      toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
+      toRequestOptions(config, { body }),
     )
   }
 
-  async ingest<T = unknown>(
+  async ingest(
     sourceId: string,
     params: RequestConfig & { items: readonly ExternalTransactionItem[] },
-  ): Promise<T> {
+  ): Promise<IngestResult> {
     const { items, ...config } = params
-    return await this.unwrap<T>(
+    return await this.unwrap<IngestResult>(
       'POST',
       `/v1/sources/${encodePathSegment(sourceId)}/external_transactions`,
       toRequestOptions(config, { body: { items } }),
     )
   }
 
-  async reconcile<T = unknown>(
+  async reconcile(
     sourceId: string,
     params: RunInput & RequestConfig = {},
-  ): Promise<T> {
-    const { signal, timeoutMs, maxRetries, headers, ledgerId, from, to, ...rest } = params
-    const body = { ...rest, from: iso(from), to: iso(to) }
-    return await this.unwrap<T>(
+  ): Promise<ReconciliationRun> {
+    const { config, body: rest } = splitConfig(params)
+    const body = compact({ ...rest, from: isoDate(params.from), to: isoDate(params.to) })
+    return await this.unwrap<ReconciliationRun>(
       'POST',
       `/v1/sources/${encodePathSegment(sourceId)}/reconciliation_runs`,
-      toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
+      toRequestOptions(config, { body }),
     )
   }
 
-  async enableInbound<T = unknown>(id: string, config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>(
+  async enableInbound(id: string, config?: RequestConfig): Promise<InboundEndpoint> {
+    return await this.unwrap<InboundEndpoint>(
       'POST',
       `/v1/sources/${encodePathSegment(id)}/inbound`,
       toRequestOptions(config),
@@ -121,21 +124,21 @@ export class SourcesResource extends Resource {
 }
 
 export class ReconciliationRunsResource extends Resource {
-  async create<T = unknown>(
+  async create(
     params: RunInput &
       RequestConfig & { source: string; items: readonly ExternalTransactionItem[] },
-  ): Promise<T> {
-    const { signal, timeoutMs, maxRetries, headers, ledgerId, from, to, ...rest } = params
-    const body = { ...rest, from: iso(from), to: iso(to) }
-    return await this.unwrap<T>(
+  ): Promise<ReconciliationRun> {
+    const { config, body: rest } = splitConfig(params)
+    const body = compact({ ...rest, from: isoDate(params.from), to: isoDate(params.to) })
+    return await this.unwrap<ReconciliationRun>(
       'POST',
       '/v1/reconciliation_runs',
-      toRequestOptions({ signal, timeoutMs, maxRetries, headers, ledgerId }, { body }),
+      toRequestOptions(config, { body }),
     )
   }
 
-  async list<T = unknown>(params: ListParams = {}): Promise<Page<T>> {
-    return await this.page<T>(
+  async list(params: ListParams = {}): Promise<Page<ReconciliationRun>> {
+    return await this.page<ReconciliationRun>(
       '/v1/reconciliation_runs',
       { limit: params.limit },
       'cursor',
@@ -143,8 +146,8 @@ export class ReconciliationRunsResource extends Resource {
     )
   }
 
-  async get<T = unknown>(id: string, config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>(
+  async get(id: string, config?: RequestConfig): Promise<ReconciliationRun> {
+    return await this.unwrap<ReconciliationRun>(
       'GET',
       `/v1/reconciliation_runs/${encodePathSegment(id)}`,
       toRequestOptions(config),
@@ -153,17 +156,17 @@ export class ReconciliationRunsResource extends Resource {
 }
 
 export class ExternalTransactionsResource extends Resource {
-  async list<T = unknown>(params: ExternalTransactionListParams = {}): Promise<Page<T>> {
+  async list(params: ExternalTransactionListParams = {}): Promise<Page<ExternalTransaction>> {
     const query = {
       cursor: params.cursor,
       limit: params.limit,
       status: params.status,
       source_id: params.sourceId,
       currency: params.currency,
-      from: iso(params.from),
-      to: iso(params.to),
+      from: isoDate(params.from),
+      to: isoDate(params.to),
     }
-    return await this.page<T>(
+    return await this.page<ExternalTransaction>(
       '/v1/external_transactions',
       query,
       'cursor',
@@ -171,50 +174,51 @@ export class ExternalTransactionsResource extends Resource {
     )
   }
 
-  async get<T = unknown>(id: string, config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>(
+  async get(id: string, config?: RequestConfig): Promise<ExternalTransaction> {
+    return await this.unwrap<ExternalTransaction>(
       'GET',
       `/v1/external_transactions/${encodePathSegment(id)}`,
       toRequestOptions(config),
     )
   }
 
-  async matches<T = unknown>(id: string, config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>(
-      'GET',
+  async matches(id: string, params: ListParams = {}): Promise<Page<ReconciliationMatch>> {
+    return await this.page<ReconciliationMatch>(
       `/v1/external_transactions/${encodePathSegment(id)}/matches`,
-      toRequestOptions(config),
+      { cursor: params.cursor, limit: params.limit },
+      'cursor',
+      toRequestOptions(params),
     )
   }
 
-  async match<T = unknown>(
+  async match(
     id: string,
     params: RequestConfig & { postingIds: readonly (string | number)[]; note?: string },
-  ): Promise<T> {
+  ): Promise<ExternalTransaction> {
     const body = { posting_ids: params.postingIds, note: params.note }
-    return await this.unwrap<T>(
+    return await this.unwrap<ExternalTransaction>(
       'POST',
       `/v1/external_transactions/${encodePathSegment(id)}/match`,
       toRequestOptions(params, { body }),
     )
   }
 
-  async unmatch<T = unknown>(
+  async unmatch(
     id: string,
     params: RequestConfig & { reason?: string } = {},
-  ): Promise<T> {
-    return await this.unwrap<T>(
+  ): Promise<ExternalTransaction> {
+    return await this.unwrap<ExternalTransaction>(
       'POST',
       `/v1/external_transactions/${encodePathSegment(id)}/unmatch`,
       toRequestOptions(params, { body: { reason: params.reason } }),
     )
   }
 
-  async ignore<T = unknown>(
+  async ignore(
     id: string,
     params: RequestConfig & { reason?: string } = {},
-  ): Promise<T> {
-    return await this.unwrap<T>(
+  ): Promise<ExternalTransaction> {
+    return await this.unwrap<ExternalTransaction>(
       'POST',
       `/v1/external_transactions/${encodePathSegment(id)}/ignore`,
       toRequestOptions(params, { body: { reason: params.reason } }),

@@ -1,19 +1,24 @@
 import type { Transport } from '../../core/http'
 import type { Page } from '../../core/pagination'
+import { compact } from '../../core/params'
 import { encodePathSegment, Resource } from '../../core/resource'
-import { omitUndefined, toRequestOptions } from '../request'
+import { toRequestOptions } from '../request'
 import type {
   ActionIntent,
   Agent,
   ApprovalImpact,
   AuditEvent,
   BillingOverview,
+  BillingPortal,
   Budget,
+  CheckoutResult,
   ControlWebhookEndpoint,
+  Decision,
   Funds,
   Invitation,
   ListParams,
   Membership,
+  PackCheckout,
   PaymentIntent,
   Policy,
   PolicyModule,
@@ -22,6 +27,7 @@ import type {
   Role,
   SpendToken,
   Workspace,
+  WorkspaceExport,
 } from '../types'
 
 const CURSOR_PARAM = 'starting_after'
@@ -39,7 +45,7 @@ abstract class ScopedResource extends Resource {
   }
 
   protected listQuery(params: ListParams, extra: Record<string, unknown> = {}) {
-    return omitUndefined({
+    return compact({
       limit: params.limit,
       starting_after: params.startingAfter,
       ...extra,
@@ -56,7 +62,7 @@ export class AgentsResource extends ScopedResource {
       scopes?: readonly string[]
     },
   ): Promise<Agent> {
-    const body = omitUndefined({
+    const body = compact({
       name: params.name,
       mode: params.mode,
       status: params.status,
@@ -90,7 +96,7 @@ export class AgentsResource extends ScopedResource {
     id: string,
     params: RequestConfig & { name?: string; status?: string; scopes?: readonly string[] },
   ): Promise<Agent> {
-    const body = omitUndefined({ name: params.name, status: params.status, scopes: params.scopes })
+    const body = compact({ name: params.name, status: params.status, scopes: params.scopes })
     return await this.unwrap<Agent>(
       'PATCH',
       this.base(`/agents/${encodePathSegment(id)}`),
@@ -135,7 +141,7 @@ export class PoliciesResource extends ScopedResource {
     )
   }
 
-  async preview<T = unknown>(
+  async preview(
     params: RequestConfig & {
       agentId: string
       actionType: string
@@ -145,8 +151,8 @@ export class PoliciesResource extends ScopedResource {
       sessionBudgetCents?: number
       policy?: Record<string, unknown>
     },
-  ): Promise<T> {
-    const body = omitUndefined({
+  ): Promise<Decision> {
+    const body = compact({
       agent_id: params.agentId,
       action_type: params.actionType,
       resource: params.resource,
@@ -155,7 +161,7 @@ export class PoliciesResource extends ScopedResource {
       session_budget_cents: params.sessionBudgetCents,
       policy: params.policy,
     })
-    return await this.unwrap<T>(
+    return await this.unwrap<Decision>(
       'POST',
       this.base('/policy_previews'),
       toRequestOptions(params, { body }),
@@ -171,7 +177,7 @@ export class PolicyModulesResource extends ScopedResource {
       rules?: readonly Record<string, unknown>[]
     },
   ): Promise<PolicyModule> {
-    const body = omitUndefined({
+    const body = compact({
       name: params.name,
       description: params.description,
       rules: params.rules,
@@ -207,7 +213,7 @@ export class PolicyModulesResource extends ScopedResource {
       rules?: readonly Record<string, unknown>[]
     },
   ): Promise<PolicyModule> {
-    const body = omitUndefined({ description: params.description, rules: params.rules })
+    const body = compact({ description: params.description, rules: params.rules })
     return await this.unwrap<PolicyModule>(
       'PATCH',
       this.base(`/policy_modules/${encodePathSegment(name)}`),
@@ -283,7 +289,7 @@ class ApprovalQueue<T> extends ScopedResource {
     return await this.unwrap<T>(
       'POST',
       this.base(`/${this.collection}/${encodePathSegment(id)}/deny`),
-      toRequestOptions(params, { body: omitUndefined({ reason: params.reason }) }),
+      toRequestOptions(params, { body: compact({ reason: params.reason }) }),
     )
   }
 }
@@ -377,7 +383,7 @@ export class ControlWebhookEndpointsResource extends ScopedResource {
       enabledEvents?: readonly string[]
     },
   ): Promise<ControlWebhookEndpoint> {
-    const body = omitUndefined({
+    const body = compact({
       url: params.url,
       status: params.status,
       enabled_events: params.enabledEvents,
@@ -436,7 +442,7 @@ export class MembersResource extends ScopedResource {
   async add(
     params: RequestConfig & { userSub: string; email?: string; role?: Role },
   ): Promise<Membership> {
-    const body = omitUndefined({
+    const body = compact({
       user_sub: params.userSub,
       email: params.email,
       role: params.role,
@@ -476,7 +482,7 @@ export class InvitationsResource extends ScopedResource {
   }
 
   async create(params: RequestConfig & { email: string; role?: Role }): Promise<Invitation> {
-    const body = omitUndefined({ email: params.email, role: params.role })
+    const body = compact({ email: params.email, role: params.role })
     return await this.unwrap<Invitation>(
       'POST',
       this.base('/invitations'),
@@ -502,36 +508,48 @@ export class BillingResource extends ScopedResource {
     )
   }
 
-  async checkout<T = unknown>(
+  async checkout(
     params: RequestConfig & { plan: string; email?: string },
-  ): Promise<T> {
-    const body = omitUndefined({ plan: params.plan, email: params.email })
-    return await this.unwrap<T>(
+  ): Promise<CheckoutResult> {
+    const body = compact({ plan: params.plan, email: params.email })
+    return await this.unwrap<CheckoutResult>(
       'POST',
       this.base('/billing/checkout'),
       toRequestOptions(params, { body }),
     )
   }
 
-  async packs<T = unknown>(params: RequestConfig & { units: number; email?: string }): Promise<T> {
-    const body = omitUndefined({ units: params.units, email: params.email })
-    return await this.unwrap<T>(
+  async packs(params: RequestConfig & { units: number; email?: string }): Promise<PackCheckout> {
+    const body = compact({ units: params.units, email: params.email })
+    return await this.unwrap<PackCheckout>(
       'POST',
       this.base('/billing/packs'),
       toRequestOptions(params, { body }),
     )
   }
 
-  async portal<T = unknown>(config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>('POST', this.base('/billing/portal'), toRequestOptions(config))
+  async portal(config?: RequestConfig): Promise<BillingPortal> {
+    return await this.unwrap<BillingPortal>(
+      'POST',
+      this.base('/billing/portal'),
+      toRequestOptions(config),
+    )
   }
 
-  async cancel<T = unknown>(config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>('POST', this.base('/billing/cancel'), toRequestOptions(config))
+  async cancel(config?: RequestConfig): Promise<BillingOverview> {
+    return await this.unwrap<BillingOverview>(
+      'POST',
+      this.base('/billing/cancel'),
+      toRequestOptions(config),
+    )
   }
 
-  async refresh<T = unknown>(config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>('POST', this.base('/billing/refresh'), toRequestOptions(config))
+  async refresh(config?: RequestConfig): Promise<BillingOverview> {
+    return await this.unwrap<BillingOverview>(
+      'POST',
+      this.base('/billing/refresh'),
+      toRequestOptions(config),
+    )
   }
 }
 
@@ -546,7 +564,7 @@ export class WorkspacesResource extends Resource {
   }
 
   async create(params: RequestConfig & { name: string; slug?: string }): Promise<Workspace> {
-    const body = omitUndefined({ name: params.name, slug: params.slug })
+    const body = compact({ name: params.name, slug: params.slug })
     return await this.unwrap<Workspace>(
       'POST',
       '/v1/workspaces',
@@ -570,8 +588,8 @@ export class WorkspacesResource extends Resource {
     )
   }
 
-  async export<T = unknown>(slug: string, config?: RequestConfig): Promise<T> {
-    return await this.unwrap<T>(
+  async export(slug: string, config?: RequestConfig): Promise<WorkspaceExport> {
+    return await this.unwrap<WorkspaceExport>(
       'GET',
       `/v1/workspaces/${encodePathSegment(slug)}/export`,
       toRequestOptions(config),

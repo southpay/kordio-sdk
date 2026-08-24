@@ -29,6 +29,37 @@ export type ControlErrorCode = NonNullable<Schemas['Error']['error']['code']>
 
 export type Outcome = 'allowed' | 'requires_approval' | 'denied'
 
+export interface CheckoutStarted {
+  checkout_url: string
+  checkout_id: string
+  plan: string
+}
+
+export interface PlanChanged {
+  plan_changed: boolean
+  plan: string
+}
+
+export type CheckoutResult = CheckoutStarted | PlanChanged
+
+export interface PackCheckout {
+  checkout_url: string
+  checkout_id: string
+  units: number
+  volume_cents: number
+}
+
+export interface BillingPortal {
+  portal_url: string
+}
+
+export interface WorkspaceExport {
+  workspace: Workspace
+  exported_at: string
+  counts: Record<string, number>
+  [key: string]: unknown
+}
+
 export type Headroom = Record<string, number>
 
 export interface RequestConfig {

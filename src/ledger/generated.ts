@@ -4495,7 +4495,7 @@ export interface components {
              * @default standard
              * @enum {string}
              */
-            account_kind: "standard" | "restricted";
+            account_kind?: "standard" | "restricted";
             /**
              * @description Opaque, customer-defined identifier of the counterparty a
              *     reserve account is held against. Set automatically by
@@ -4541,7 +4541,7 @@ export interface components {
              * @default neutral
              * @enum {string}
              */
-            fund_classification: "client_held" | "operator" | "neutral";
+            fund_classification?: "client_held" | "operator" | "neutral";
             /** @example accounts_receivable:acme */
             id: string;
             metadata?: {
@@ -4636,7 +4636,7 @@ export interface components {
              * @default allowed
              * @enum {string}
              */
-            overdraft_policy: "allowed" | "none";
+            overdraft_policy?: "allowed" | "none";
             /**
              * @example liability
              * @enum {string}
@@ -4973,7 +4973,7 @@ export interface components {
              * @description Pending postings don't move the `posted` balance until committed.
              * @default false
              */
-            pending: boolean;
+            pending?: boolean;
             /**
              * @example {
              *       "region": "EU",
@@ -5009,7 +5009,7 @@ export interface components {
              */
             direction: "debit" | "credit";
             /** @default false */
-            pending: boolean;
+            pending?: boolean;
             /**
              * @description Flat string-to-string map of dimensions for reporting (department,
              *     region, project, etc.). Filterable via `?tags[key]=value`.

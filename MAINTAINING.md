@@ -1,6 +1,6 @@
 # Maintaining this SDK
 
-The SDK wraps 155 operations across two APIs. Nobody is going to keep that in sync by hand, so almost none of it is kept in sync by hand.
+The SDK wraps 155 operations across two APIs. Keeping that in sync by hand is not realistic, so most of it is not kept in sync by hand.
 
 ## The rule
 
@@ -16,7 +16,7 @@ specs/{ledger,control}.openapi.yaml          vendored, committed
 src/{ledger,control}/generated.ts            10k lines, committed, never edited
         │  type aliases
         ▼
-src/{ledger,control}/types.ts                Account, Transaction, Budget, Decision, …
+src/{ledger,control}/types.ts                Account, Transaction, Budget, Decision, ...
         │  used by
         ▼
 src/*/resources/*.ts                         hand-written, ~1 line of transport per method
@@ -34,31 +34,32 @@ bun run verify      # generated-freshness, coverage, typecheck, tests, lint, bui
 
 `bun run verify` is the whole gate. Run it before you push; CI runs the same thing.
 
-If `sync` reports changes, commit the vendored specs and the regenerated types together with whatever SDK code the change required. The vendored copies exist so the package builds without the docs repo checked out — CI, a fresh clone, and `npm publish` all work standalone.
+If `sync` reports changes, commit the vendored specs and the regenerated types together with whatever SDK code the change required. The vendored copies exist so the package builds without the docs repo checked out, which is what makes CI, a fresh clone and `npm publish` work standalone.
 
 By default `sync` reads a sibling `../docs-kordio` checkout. Point it elsewhere with `KORDIO_DOCS_REPO=/path/to/docs-kordio`, or pull the published specs with `bun run sync --from-url`.
 
 ## The two guards
 
-Generated code that nobody regenerates is worse than no generated code, so both failure modes are checked.
+Generated code goes stale quietly, so both failure modes are checked.
 
 **`bun run check:generated`** regenerates types in memory and fails if they differ from what is committed. You cannot land a spec change and forget to regenerate.
 
 **`bun run check:coverage`** parses both specs, then parses the SDK source for the paths it actually calls, and fails on any operation no method reaches. When someone adds an endpoint to a spec, this is what tells you. Every exception is explicit and lives in `scripts/check-coverage.ts`:
 
-- `INTENTIONALLY_UNWRAPPED` — operations that should not have a method, each with a reason. `DELETE /v1/transactions/{id}` is a documented `405` because the ledger is append-only; `POST /oauth/token` is handled inside the auth provider.
-- `COVERED_BY` — operations served by a method whose path is built dynamically, so the static scan cannot see it (the shared `ApprovalQueue`, the cosign calls). Each entry names the class and method that serves it, **and the checker verifies that symbol still exists**. Rename the method and the build fails rather than the exemption quietly becoming a lie.
+`INTENTIONALLY_UNWRAPPED` lists operations that should not have a method, each with a reason. `DELETE /v1/transactions/{id}` is a documented `405` because the ledger is append-only. `POST /oauth/token` is handled inside the auth provider.
+
+`COVERED_BY` lists operations served by a method whose path is built dynamically, so the static scan cannot see it. The shared `ApprovalQueue` and the cosign calls are the two cases. Each entry names the class and method that serves it, and the checker confirms that symbol still exists, so renaming the method fails the build instead of leaving a stale exemption behind.
 
 Both lists are small on purpose. If either starts growing, that is the signal to change the code rather than the list.
 
 ## What is hand-written, and why
 
-Generated clients are unpleasant to use, so the resource layer is written by hand. It should stay boring — a method is a path, a body, and a return type. Ergonomics that are worth hand-writing:
+Generated clients are unpleasant to use, so the resource layer is written by hand. It should stay boring. A method is a path, a body and a return type. The ergonomics worth hand-writing:
 
 - **Signed amounts.** `amount: -1200` becomes `{ amount: '1200', direction: 'credit' }`. Callers think in signed deltas; the API wants magnitude plus direction.
 - **Big amounts.** Ledger amounts are `numeric(38,0)`. Floats are rejected, unsafe integers are rejected, `bigint` and decimal strings pass through. An 18-decimal token amount must never round-trip through a JS `Number`.
 - **Balance before the round trip.** Postings are checked per currency client-side, so an unbalanced write fails with a message naming the currency instead of a `422`.
-- **Decisions are not exceptions.** `POST /v1/agent/actions` answers `201`, `202` or `403` and all three are answers. `actions.authorize()` returns a discriminated union on `outcome`. Only genuine failures throw. Getting this wrong — letting a denial surface as a caught exception — is the single easiest way to build an agent that treats "no" as "retry".
+- **Decisions are not exceptions.** `POST /v1/agent/actions` answers `201`, `202` or `403` and all three are answers. `actions.authorize()` returns a discriminated union on `outcome`, and only genuine failures throw. If a denial surfaces as a caught exception, whoever wrote the catch block will eventually retry into it.
 - **Two control clients.** An agent key and an identity token are deliberately not interchangeable. `KordioAgent` and `KordioWorkspace` are separate classes so the type system carries that boundary instead of a comment.
 - **Idempotency keys are required, not generated.** The ledger's contract is that a key returns the same transaction forever. Generating one per call would make internal retries safe and cross-process retries meaningless, so the SDK asks for one and says why.
 
@@ -68,15 +69,28 @@ Everything else is a pass-through. Resist adding cleverness that has to be maint
 
 Requests accept camelCase for modelled fields. Responses are returned exactly as the API sends them.
 
-A deep camelCase↔snake_case converter was considered and rejected. Response types come straight from the generated types, so a rewriting pass would need its own hand-maintained type transform and — worse — would have to know which objects are free-form maps whose keys are caller data. `metadata`, `tags`, `detail`, `headroom` and `by_currency` all have user-controlled keys. Rewriting `metadata.order_id` to `metadata.orderId` silently corrupts data. The exception list to avoid that is exactly the per-endpoint maintenance burden this design exists to avoid.
+A deep camelCase↔snake_case converter was considered and rejected. Response types come straight from the generated types, so a rewriting pass would need its own hand-maintained type transform. It would also have to know which objects are free-form maps whose keys are caller data. `metadata`, `tags`, `detail`, `headroom` and `by_currency` all have user-controlled keys. Rewriting `metadata.order_id` to `metadata.orderId` silently corrupts data. The exception list to avoid that is exactly the per-endpoint maintenance burden this design exists to avoid.
 
 ## Adding an endpoint
 
 1. `bun run sync && bun run generate`.
-2. `bun run check:coverage` — it names the new operation.
+2. Run `bun run check:coverage`. It names the new operation.
 3. Add the method to the matching resource class. Copy the nearest neighbour; it will be about six lines.
 4. Add a test asserting the method, path, and body that go over the wire. `test/helpers.ts` has the mock server.
 5. `bun run verify`.
+
+## Live validation catches what the specs cannot
+
+`bun run verify` proves the SDK is self-consistent. It cannot prove the SDK matches the running API, because both are checked against the same spec, and the spec can be wrong or the code can misread it.
+
+`bun run validate:live` closes that gap by exercising a real ledger. Run it before any release. The first time it ran it found four defects that every static check had passed:
+
+- `transactions.lookup` was sending `idempotency_key`; the endpoint takes a required `rail`/`kind`/`value` tuple. The spec said so plainly and the method had been written from a guess.
+- `accounts.statement` was typed as a page of postings; it returns a single `account_statement` object with opening and closing balances.
+- `accounts.create` demanded `overdraft_policy` because openapi-typescript treats a property with a `default` as always present. That holds for responses but not for request bodies. Fixed globally with `defaultNonNullable: false` in `scripts/generate.ts`.
+- The OAuth token endpoint lives at the host root, not under the API path prefix, so a `baseUrl` of `http://localhost:4000/api` produced a 404 on every token request. Now resolved with `new URL('/oauth/token', baseUrl)`.
+
+None of those are visible to `check:coverage`, which only asks whether some method calls a path, not whether it calls it correctly. Coverage tells you something is missing. Only the live run tells you the parts you did write are right.
 
 ## Releasing
 
@@ -88,11 +102,11 @@ npm publish --access public
 git push --follow-tags
 ```
 
-Bump `SDK_VERSION` in `src/core/http.ts` alongside the package version — it is the `User-Agent` the API sees, and it is how a bad release gets identified in server logs.
+Bump `SDK_VERSION` in `src/core/http.ts` alongside the package version. It is the `User-Agent` the API sees, which is how a bad release gets identified in server logs.
 
 ## Adding another language
 
-The generation step is the only language-specific piece. `specs/` is the contract; point another generator at the same vendored files. Keep the ergonomic decisions above identical across languages — especially decisions-are-not-exceptions and required idempotency keys — because they are product behaviour, not TypeScript conveniences.
+The generation step is the only language-specific piece. `specs/` is the contract; point another generator at the same vendored files. Keep the ergonomic decisions above identical across languages, particularly decisions-are-not-exceptions and required idempotency keys. Those are product behaviour rather than TypeScript conveniences.
 
 ## Known spec drift
 
