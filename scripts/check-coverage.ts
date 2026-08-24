@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import YAML from 'yaml'
 import { REPO_ROOT, SPECS } from './specs'
@@ -57,18 +57,15 @@ const pagePattern = /this\.page\s*(?:<[^(]*?>)?\s*\(\s*(?:this\.base\(\s*)?(?:'(
 function collectCalls(): Set<string> {
   const found = new Set<string>()
   for (const file of sourceFiles(join(REPO_ROOT, 'src'))) {
-    const text = Bun.file(file).text()
-    const source = require('node:fs').readFileSync(file, 'utf8') as string
-    void text
+    const source = readFileSync(file, 'utf8')
     const scoped = source.includes('extends ScopedResource') || source.includes('this.base(')
 
     const record = (method: string, raw: string) => {
-      if (!raw) return
-      const isSuffix = !(!raw.startsWith('/v1/') && !raw.startsWith('/'))
-      if (!isSuffix) return
-      const direct = normalize(raw)
-      found.add(`${method} ${direct}`)
-      if (scoped && !raw.startsWith('/v1/')) {
+      if (!raw.startsWith('/')) return
+      found.add(`${method} ${normalize(raw)}`)
+
+      const isWorkspaceSuffix = !raw.startsWith('/v1/') && !raw.startsWith('/api/')
+      if (scoped && isWorkspaceSuffix) {
         found.add(`${method} ${normalize(`/v1/workspaces/{}${raw}`)}`)
       }
     }
@@ -93,7 +90,7 @@ function collectCalls(): Set<string> {
 }
 
 const ALL_SOURCE = sourceFiles(join(REPO_ROOT, 'src'))
-  .map((file) => require('node:fs').readFileSync(file, 'utf8') as string)
+  .map((file) => readFileSync(file, 'utf8'))
   .join('\n')
 
 function symbolExists(reference: string): boolean {

@@ -3,7 +3,15 @@
 All notable changes to this package are documented here. This project follows
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.2
+
+Fixes a broken base path. The ledger is served under `/api/v1` in production,
+not `/v1`, so every ledger call in 0.1.0 and 0.1.1 returned a 404. Spend
+control is unaffected: it is served at `/v1` and always was. If you are on an
+earlier version, upgrade. There is no workaround on 0.1.x below this.
+
+For local development `KORDIO_BASE_URL` is now `http://localhost:4000`, without
+the `/api` suffix, since the prefix has moved into the paths.
 
 Spec enums are now unions rather than `string`, so an invalid value fails to
 compile instead of failing at the API. Where the generated types already carry
