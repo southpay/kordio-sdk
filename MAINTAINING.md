@@ -92,6 +92,32 @@ A deep camelCase↔snake_case converter was considered and rejected. Response ty
 
 None of those are visible to `check:coverage`, which only asks whether some method calls a path, not whether it calls it correctly. Coverage tells you something is missing. Only the live run tells you the parts you did write are right.
 
+## Shapes, not just paths
+
+`check:routes` proves a documented path is served. It says nothing about what
+comes back, and every wrong type this SDK has shipped was a shape rather than a
+path: `enableInbound` returning a `Source` rather than the object we invented,
+`external_transaction` keying on `external_id` rather than `external_reference`,
+`simulate` answering with the decision as its `data`.
+
+`bun run check:shapes` calls the API for real and compares each response against
+the schema the spec declares, reporting fields the response carries that the
+spec does not mention and required fields the response omits. It needs
+credentials, so it is not part of `verify`:
+
+```bash
+export KORDIO_CLIENT_ID=... KORDIO_CLIENT_SECRET=... KORDIO_LEDGER_ID=...
+export KORDIO_AGENT_KEY=krt_test_...
+export KORDIO_BASE_URL=http://localhost:4000
+export KORDIO_CONTROL_BASE_URL=http://localhost:3005
+bun run check:shapes
+```
+
+It walks a real agent flow, so it opens a budget and books an action. Point it
+at test mode. Adding an endpoint to the sweep is a few lines in the script;
+anything it cannot compare is counted as `No schema declared`, which is the
+number to drive to zero.
+
 ## Releasing
 
 `prepublishOnly` runs `verify`, so a broken build cannot be published.

@@ -51,6 +51,7 @@
     "check:coverage": "bun scripts/check-coverage.ts",
     "check:routes": "bun scripts/check-routes.ts",
     "validate:live": "bun scripts/validate-live.ts",
+    "check:shapes": "bun scripts/check-shapes.ts",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
