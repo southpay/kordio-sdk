@@ -160,6 +160,8 @@ paths:
                     session_remaining_cents: 38000
                     monthly_remaining_cents: 188000
                   policy_snapshot: []
+                  policy_version: pv_8f2c1d0a4b6e93571ac2e8d045f7b312
+                  frame_hash: fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
                 cosignature: eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0
         '202':
           description: >-
@@ -184,6 +186,8 @@ paths:
                   headroom:
                     session_remaining_cents: 260000
                   policy_snapshot: []
+                  policy_version: pv_8f2c1d0a4b6e93571ac2e8d045f7b312
+                  frame_hash: fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
         '403':
           description: >-
             `denied`. Do not execute. `decision.rule` names what refused. The intent is
@@ -206,6 +210,8 @@ paths:
                   headroom:
                     session_remaining_cents: 380000
                   policy_snapshot: []
+                  policy_version: pv_8f2c1d0a4b6e93571ac2e8d045f7b312
+                  frame_hash: fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
         '401':
           $ref: '#/components/responses/AgentUnauthorized'
         '404':
@@ -614,6 +620,8 @@ paths:
                   headroom:
                     session_remaining_cents: 38000
                   policy_snapshot: []
+                  policy_version: pv_8f2c1d0a4b6e93571ac2e8d045f7b312
+                  frame_hash: fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
                 cosignature: eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0
         '202':
           description: >-
@@ -3175,7 +3183,29 @@ components:
         policy_snapshot:
           type: array
           items: { type: object, additionalProperties: true }
-          description: The compiled policies as they stood when this decision was made.
+          description: >-
+            The compiled policies as they stood when this decision was made, each with an
+            `imported_rules` entry carrying the rules of every module it imports, resolved
+            at decision time. Editing a module later does not change what this records.
+        policy_version:
+          type: string
+          nullable: true
+          description: >-
+            Content digest of `policy_snapshot`, stable for a given set of rules and
+            different for any other. Two decisions sharing a `policy_version` were judged
+            by identical rules, so the same frame under the same version replays to the
+            same outcome. `pv_none` when the agent has no policy at all.
+          examples:
+            - pv_8f2c1d0a4b6e93571ac2e8d045f7b312
+        frame_hash:
+          type: string
+          nullable: true
+          description: >-
+            SHA-256 over the canonical request frame: action type, resource, cost, currency,
+            agent, budget, workspace and the full `metadata`. It binds the decision to the
+            exact request that produced it, including metadata no response echoes back.
+          examples:
+            - fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
 
     ActionRequest:
       type: object
@@ -3772,6 +3802,18 @@ components:
         resource: { type: string, nullable: true }
         amount_cents: { type: integer }
         currency: { type: string }
+        policy_version:
+          type: string
+          nullable: true
+          description: >-
+            The rules in force when this authority was granted. Pin it alongside the
+            receipt and the decision stays replayable after the policy changes.
+        frame_hash:
+          type: string
+          nullable: true
+          description: >-
+            The request frame this authority was signed over. Recompute it from the request
+            you hold to confirm the receipt is for that request and no other.
         expires_at: { type: string, format: date-time }
 
     CosignatureVerificationInvalid:

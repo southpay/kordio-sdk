@@ -1537,8 +1537,12 @@ export interface components {
             currency?: string;
             /** Format: date-time */
             expires_at?: string;
+            /** @description The request frame this authority was signed over. Recompute it from the request you hold to confirm the receipt is for that request and no other. */
+            frame_hash?: string | null;
             /** Format: uuid */
             intent_id?: string;
+            /** @description The rules in force when this authority was granted. Pin it alongside the receipt and the decision stays replayable after the policy changes. */
+            policy_version?: string | null;
             reason?: string | null;
             resource?: string | null;
             /** @constant */
@@ -1549,16 +1553,26 @@ export interface components {
             detail: {
                 [key: string]: unknown;
             };
+            /**
+             * @description SHA-256 over the canonical request frame: action type, resource, cost, currency, agent, budget, workspace and the full `metadata`. It binds the decision to the exact request that produced it, including metadata no response echoes back.
+             * @example fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
+             */
+            frame_hash?: string | null;
             /** @description What is left on every limit that applied, reduced to the tightest value per key. Give it to your agent: one that knows it has $380 left picks a cheaper vendor, one that only knows it was refused retries into the same wall. */
             headroom: {
                 [key: string]: number;
             };
             /** @enum {string} */
             outcome: "allowed" | "denied" | "requires_approval";
-            /** @description The compiled policies as they stood when this decision was made. */
+            /** @description The compiled policies as they stood when this decision was made, each with an `imported_rules` entry carrying the rules of every module it imports, resolved at decision time. Editing a module later does not change what this records. */
             policy_snapshot?: {
                 [key: string]: unknown;
             }[];
+            /**
+             * @description Content digest of `policy_snapshot`, stable for a given set of rules and different for any other. Two decisions sharing a `policy_version` were judged by identical rules, so the same frame under the same version replays to the same outcome. `pv_none` when the agent has no policy at all.
+             * @example pv_8f2c1d0a4b6e93571ac2e8d045f7b312
+             */
+            policy_version?: string | null;
             /**
              * @description The rule that produced this outcome, `null` when allowed with nothing to report. Rules from the typed policy columns surface under their column name: `per_transaction_cap`, `velocity_cap`, `monthly_cap`, `counterparty_allowlist`, `approval_threshold`. Rules written in the `rules` array surface under their `rule_name`, defaulting to the rule kind.
              * @example per_transaction_cap
@@ -2044,7 +2058,9 @@ export interface operations {
                      *           "session_remaining_cents": 38000,
                      *           "monthly_remaining_cents": 188000
                      *         },
-                     *         "policy_snapshot": []
+                     *         "policy_snapshot": [],
+                     *         "policy_version": "pv_8f2c1d0a4b6e93571ac2e8d045f7b312",
+                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456"
                      *       },
                      *       "cosignature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0"
                      *     }
@@ -2076,7 +2092,9 @@ export interface operations {
                      *         "headroom": {
                      *           "session_remaining_cents": 260000
                      *         },
-                     *         "policy_snapshot": []
+                     *         "policy_snapshot": [],
+                     *         "policy_version": "pv_8f2c1d0a4b6e93571ac2e8d045f7b312",
+                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456"
                      *       }
                      *     }
                      */
@@ -2107,7 +2125,9 @@ export interface operations {
                      *         "headroom": {
                      *           "session_remaining_cents": 380000
                      *         },
-                     *         "policy_snapshot": []
+                     *         "policy_snapshot": [],
+                     *         "policy_version": "pv_8f2c1d0a4b6e93571ac2e8d045f7b312",
+                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456"
                      *       }
                      *     }
                      */
@@ -2423,7 +2443,9 @@ export interface operations {
                      *         "headroom": {
                      *           "session_remaining_cents": 38000
                      *         },
-                     *         "policy_snapshot": []
+                     *         "policy_snapshot": [],
+                     *         "policy_version": "pv_8f2c1d0a4b6e93571ac2e8d045f7b312",
+                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456"
                      *       },
                      *       "cosignature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0"
                      *     }
