@@ -1573,6 +1573,8 @@ export interface components {
              * @example pv_8f2c1d0a4b6e93571ac2e8d045f7b312
              */
             policy_version?: string | null;
+            /** @description What would make this call succeed, or `null` on an allow. Read `kind` to branch in code and show `summary` to a person. */
+            remedy?: components["schemas"]["Remedy"] | null;
             /**
              * @description The rule that produced this outcome, `null` when allowed with nothing to report. Rules from the typed policy columns surface under their column name: `per_transaction_cap`, `velocity_cap`, `monthly_cap`, `counterparty_allowlist`, `approval_threshold`. Rules written in the `rules` array surface under their `rule_name`, defaulting to the rule kind.
              * @example per_transaction_cap
@@ -1776,6 +1778,27 @@ export interface components {
             total: number;
             /** @description Their combined value in cents. */
             total_cents: number;
+        };
+        /** @description The fix for a decision that did not go through. Denials and holds carry one whenever the outcome has a mechanical cause; a rule written as a free-form condition may not. */
+        Remedy: {
+            /** @description The action type to allow or to add to the agent's scopes. */
+            action_type?: string | null;
+            /**
+             * @description What has to change. `lower_amount`, `wait` and `use_pinned_counterparty` are the agent's to act on unaided. The rest need a person to edit a policy, a budget or an agent's scopes.
+             * @enum {string}
+             */
+            kind: "lower_amount" | "raise_budget" | "reopen_budget" | "wait" | "approve" | "allow_resource" | "allow_action" | "grant_scope" | "create_policy" | "use_pinned_counterparty" | "new_spend_token";
+            /** @description The largest amount that would have gone through. Present on `lower_amount`, and on `approve` where it is the amount that would clear without a person. */
+            max_cents?: number | null;
+            /** @description The counterparty to allow, or the one a spend token is pinned to. */
+            resource?: string | null;
+            /** @description How long until the limit clears, on `wait`. Null when the limit resets on a calendar boundary rather than a rolling window. */
+            retry_after_seconds?: number | null;
+            /**
+             * @description One sentence a person can act on, with amounts already formatted.
+             * @example A per-action cap applies. Retry at $100.00 or less.
+             */
+            summary: string;
         };
         /**
          * @description `owner` carries read, approve, manage_policy and manage_members. `admin` carries read, approve and manage_policy. `member` carries read.
@@ -2060,7 +2083,8 @@ export interface operations {
                      *         },
                      *         "policy_snapshot": [],
                      *         "policy_version": "pv_8f2c1d0a4b6e93571ac2e8d045f7b312",
-                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456"
+                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456",
+                     *         "remedy": null
                      *       },
                      *       "cosignature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0"
                      *     }
@@ -2087,14 +2111,20 @@ export interface operations {
                      *         "outcome": "requires_approval",
                      *         "rule": "approval_threshold",
                      *         "detail": {
-                     *           "above_cents": 100000
+                     *           "threshold_cents": 100000,
+                     *           "requested_cents": 240000
                      *         },
                      *         "headroom": {
                      *           "session_remaining_cents": 260000
                      *         },
                      *         "policy_snapshot": [],
                      *         "policy_version": "pv_8f2c1d0a4b6e93571ac2e8d045f7b312",
-                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456"
+                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456",
+                     *         "remedy": {
+                     *           "kind": "approve",
+                     *           "max_cents": 100000,
+                     *           "summary": "Someone has to approve this. Anything at $1000.00 or less clears without approval."
+                     *         }
                      *       }
                      *     }
                      */
@@ -2119,7 +2149,7 @@ export interface operations {
                      *         "outcome": "denied",
                      *         "rule": "per_transaction_cap",
                      *         "detail": {
-                     *           "max_cents": 50000,
+                     *           "limit_cents": 50000,
                      *           "requested_cents": 120000
                      *         },
                      *         "headroom": {
@@ -2127,7 +2157,12 @@ export interface operations {
                      *         },
                      *         "policy_snapshot": [],
                      *         "policy_version": "pv_8f2c1d0a4b6e93571ac2e8d045f7b312",
-                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456"
+                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456",
+                     *         "remedy": {
+                     *           "kind": "lower_amount",
+                     *           "max_cents": 50000,
+                     *           "summary": "A per-action cap applies. Retry at $500.00 or less."
+                     *         }
                      *       }
                      *     }
                      */
@@ -2445,7 +2480,8 @@ export interface operations {
                      *         },
                      *         "policy_snapshot": [],
                      *         "policy_version": "pv_8f2c1d0a4b6e93571ac2e8d045f7b312",
-                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456"
+                     *         "frame_hash": "fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456",
+                     *         "remedy": null
                      *       },
                      *       "cosignature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0"
                      *     }

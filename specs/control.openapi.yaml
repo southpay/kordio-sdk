@@ -162,6 +162,7 @@ paths:
                   policy_snapshot: []
                   policy_version: pv_8f2c1d0a4b6e93571ac2e8d045f7b312
                   frame_hash: fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
+                  remedy: null
                 cosignature: eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0
         '202':
           description: >-
@@ -182,12 +183,19 @@ paths:
                   outcome: requires_approval
                   rule: approval_threshold
                   detail:
-                    above_cents: 100000
+                    threshold_cents: 100000
+                    requested_cents: 240000
                   headroom:
                     session_remaining_cents: 260000
                   policy_snapshot: []
                   policy_version: pv_8f2c1d0a4b6e93571ac2e8d045f7b312
                   frame_hash: fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
+                  remedy:
+                    kind: approve
+                    max_cents: 100000
+                    summary: >-
+                      Someone has to approve this. Anything at $1000.00 or less clears
+                      without approval.
         '403':
           description: >-
             `denied`. Do not execute. `decision.rule` names what refused. The intent is
@@ -205,13 +213,17 @@ paths:
                   outcome: denied
                   rule: per_transaction_cap
                   detail:
-                    max_cents: 50000
+                    limit_cents: 50000
                     requested_cents: 120000
                   headroom:
                     session_remaining_cents: 380000
                   policy_snapshot: []
                   policy_version: pv_8f2c1d0a4b6e93571ac2e8d045f7b312
                   frame_hash: fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
+                  remedy:
+                    kind: lower_amount
+                    max_cents: 50000
+                    summary: A per-action cap applies. Retry at $500.00 or less.
         '401':
           $ref: '#/components/responses/AgentUnauthorized'
         '404':
@@ -622,6 +634,7 @@ paths:
                   policy_snapshot: []
                   policy_version: pv_8f2c1d0a4b6e93571ac2e8d045f7b312
                   frame_hash: fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
+                  remedy: null
                 cosignature: eyJhbGciOiJFUzI1NiIsImtpZCI6ImtleV8xIiwidHlwIjoiSldUIn0
         '202':
           description: >-
@@ -3206,6 +3219,63 @@ components:
             exact request that produced it, including metadata no response echoes back.
           examples:
             - fh_1b9a0c7e5d2f483610badc0ffee1234567890abcdef1234567890abcdef123456
+        remedy:
+          allOf: [{ $ref: '#/components/schemas/Remedy' }]
+          nullable: true
+          description: >-
+            What would make this call succeed, or `null` on an allow. Read `kind` to branch
+            in code and show `summary` to a person.
+
+    Remedy:
+      type: object
+      required: [kind, summary]
+      description: >-
+        The fix for a decision that did not go through. Denials and holds carry one whenever
+        the outcome has a mechanical cause; a rule written as a free-form condition may not.
+      properties:
+        kind:
+          type: string
+          enum:
+            - lower_amount
+            - raise_budget
+            - reopen_budget
+            - wait
+            - approve
+            - allow_resource
+            - allow_action
+            - grant_scope
+            - create_policy
+            - use_pinned_counterparty
+            - new_spend_token
+          description: >-
+            What has to change. `lower_amount`, `wait` and `use_pinned_counterparty` are
+            the agent's to act on unaided. The rest need a person to edit a policy, a
+            budget or an agent's scopes.
+        summary:
+          type: string
+          description: One sentence a person can act on, with amounts already formatted.
+          examples:
+            - A per-action cap applies. Retry at $100.00 or less.
+        max_cents:
+          type: integer
+          nullable: true
+          description: >-
+            The largest amount that would have gone through. Present on `lower_amount`, and
+            on `approve` where it is the amount that would clear without a person.
+        retry_after_seconds:
+          type: integer
+          nullable: true
+          description: >-
+            How long until the limit clears, on `wait`. Null when the limit resets on a
+            calendar boundary rather than a rolling window.
+        resource:
+          type: string
+          nullable: true
+          description: The counterparty to allow, or the one a spend token is pinned to.
+        action_type:
+          type: string
+          nullable: true
+          description: The action type to allow or to add to the agent's scopes.
 
     ActionRequest:
       type: object
