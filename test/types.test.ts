@@ -7,36 +7,34 @@ import type {
   SpendTokenStatus,
 } from '../src/control/types'
 import type {
-  ExportResource,
-  ExternalTransactionStatus,
+  AccountKind,
   LedgerEventType,
-  ReconciliationStrategy,
-  WebhookDeliveryStatus,
+  ReportGranularity,
+  TransactionStatus,
 } from '../src/ledger/types'
 
-test('reconciliation strategy accepts only what the API accepts', () => {
-  const exact: ReconciliationStrategy = 'exact'
-  const window: ReconciliationStrategy = 'sum_in_window'
-  // @ts-expect-error the API only knows exact and sum_in_window
-  const invented: ReconciliationStrategy = 'amount_and_time'
-  expect([exact, window, invented]).toHaveLength(3)
+test('account kinds match the field the API returns', () => {
+  const standard: AccountKind = 'standard'
+  const restricted: AccountKind = 'restricted'
+  // @ts-expect-error reserve was a filter value that matched no account
+  const reserve: AccountKind = 'reserve'
+  expect([standard, restricted, reserve]).toHaveLength(3)
 })
 
-test('export resources and formats are closed sets', () => {
-  const resources: ExportResource[] = ['accounts', 'transactions', 'postings']
-  // @ts-expect-error balances is not an exportable resource
-  const wrong: ExportResource = 'balances'
-  expect([resources, wrong]).toHaveLength(2)
+test('report granularity is a closed set', () => {
+  const day: ReportGranularity = 'day'
+  // @ts-expect-error the API buckets by day, week or month only
+  const quarter: ReportGranularity = 'quarter'
+  expect([day, quarter]).toHaveLength(2)
 })
 
 test('statuses match the spec enums', () => {
-  const external: ExternalTransactionStatus = 'open'
-  const delivery: WebhookDeliveryStatus = 'succeeded'
+  const transaction: TransactionStatus = 'archived'
   const agent: AgentStatus = 'suspended'
   const token: SpendTokenStatus = 'consumed'
-  // @ts-expect-error unmatched is not a status the API returns; open is
-  const stale: ExternalTransactionStatus = 'unmatched'
-  expect([external, delivery, agent, token, stale]).toHaveLength(5)
+  // @ts-expect-error reversed transactions are archived, not reversed
+  const stale: TransactionStatus = 'reversed'
+  expect([transaction, agent, token, stale]).toHaveLength(4)
 })
 
 test('a decision outcome is one of three things', () => {

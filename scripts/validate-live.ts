@@ -247,45 +247,309 @@ async function validateLedger(): Promise<void> {
     return `${st.entry_count} entries, opening=${st.opening_balance.posted}, closing=${st.closing_balance.posted}`
   })
 
-  section('LEDGER  reconciliation')
-  await step('ingest external transactions and read them back', async () => {
-    const source = await kordio.sources.create({
-      name: `sdk-validation-${stampValue}`,
-      kind: 'custody',
+  section('LEDGER  external references')
+  const ref = { rail: 'sdk-validation', kind: 'probe', value: `ref_${stampValue}` }
+  let referencedId = ''
+  await step('a transaction carries external_refs and lookup finds it', async () => {
+    const tx = await kordio.transactions.create({
+      idempotencyKey: `sdk_validation:${stampValue}:ref`,
+      postings: [
+        { accountId: cash, amount: 500, currency: 'USDC' },
+        { accountId: payable, amount: -500, currency: 'USDC' },
+      ],
+      externalRefs: [ref],
     })
+    referencedId = tx.id
+    const found = await kordio.transactions.lookup(ref)
+    if (found.id !== tx.id) throw new Error(`lookup returned ${found.id}, expected ${tx.id}`)
+    const attached = found.external_refs?.[0]
+    if (attached?.value !== ref.value)
+      throw new Error(`external_refs=${JSON.stringify(found.external_refs)}`)
+    return `${tx.id} via ${ref.rail}/${ref.kind}`
+  })
 
-    const ingest = await kordio.sources.ingest(source.id, {
-      items: [
+  await step('the same external ref on a second transaction is refused', async () => {
+    try {
+      await kordio.transactions.create({
+        idempotencyKey: `sdk_validation:${stampValue}:ref-dupe`,
+        postings: [
+          { accountId: cash, amount: 1, currency: 'USDC' },
+          { accountId: payable, amount: -1, currency: 'USDC' },
+        ],
+        externalRefs: [ref],
+      })
+      throw new Error('expected a 409')
+    } catch (error) {
+      const e = error as { code?: string; status?: number }
+      if (e.code !== 'duplicate_external_ref') throw error
+      return `status=${e.status} code=${e.code}`
+    }
+  })
+
+  await step('refund books a partial inverse of the original', async () => {
+    const refund = await kordio.transactions.refund(referencedId, {
+      idempotencyKey: `sdk_validation:${stampValue}:refund`,
+      amount: '200',
+    })
+    if (refund.reverses !== referencedId) throw new Error(`reverses=${refund.reverses}`)
+    return `${refund.id} legs=${(refund.postings ?? []).map((p) => `${p.direction}:${p.amount}`).join(' ')}`
+  })
+
+  await step('refunds lists the refund against the original', async () => {
+    const page = await kordio.transactions.refunds(referencedId)
+    if (page.data.length !== 1) throw new Error(`expected 1 refund, got ${page.data.length}`)
+    return `${page.data[0]?.id}`
+  })
+
+  section('LEDGER  account lifecycle')
+  const spare = `sdk_validation_spare:${stampValue}`
+  await step('update changes name and classification', async () => {
+    await kordio.accounts.create({ id: spare, name: 'SDK spare', type: 'asset', currency: 'USDC' })
+    const updated = await kordio.accounts.update(spare, {
+      name: 'SDK spare renamed',
+      fund_classification: 'operator',
+    })
+    if (updated.name !== 'SDK spare renamed' || updated.fund_classification !== 'operator') {
+      throw new Error(`name=${updated.name} classification=${updated.fund_classification}`)
+    }
+    return `lock_version=${updated.lock_version}`
+  })
+
+  await step('a non-zero account cannot be closed', async () => {
+    try {
+      await kordio.accounts.close(payable, { closedByLabel: 'sdk-validation' })
+      throw new Error('expected a 409')
+    } catch (error) {
+      const e = error as { code?: string; status?: number }
+      if (e.code !== 'account_balance_nonzero') throw error
+      return `status=${e.status} code=${e.code}`
+    }
+  })
+
+  await step('a zero-balance account closes, idempotently, and rejects postings', async () => {
+    const closed = await kordio.accounts.close(spare, { closedByLabel: 'sdk-validation' })
+    if (closed.status !== 'closed') throw new Error(`status=${closed.status}`)
+    const again = await kordio.accounts.close(spare, { closedByLabel: 'someone-else' })
+    if (again.closed_by_label !== 'sdk-validation') throw new Error('re-close changed the record')
+    try {
+      await kordio.transactions.create({
+        idempotencyKey: `sdk_validation:${stampValue}:closed`,
+        postings: [
+          { accountId: spare, amount: 1, currency: 'USDC' },
+          { accountId: payable, amount: -1, currency: 'USDC' },
+        ],
+      })
+      throw new Error('expected account_closed')
+    } catch (error) {
+      const e = error as { code?: string }
+      if (e.code !== 'account_closed') throw error
+    }
+    return `closed_at=${closed.closed_at}`
+  })
+
+  section('LEDGER  pending holds and overdraft policy')
+  const wallet = `sdk_validation_wallet:${stampValue}`
+  const funding = `sdk_validation_funding:${stampValue}`
+  await step('create a no-overdraft liability and its funding asset', async () => {
+    await kordio.accounts.create({
+      id: wallet,
+      name: 'SDK wallet',
+      type: 'liability',
+      currency: 'USDC',
+      overdraft_policy: 'none',
+    })
+    await kordio.accounts.create({
+      id: funding,
+      name: 'SDK funding',
+      type: 'asset',
+      currency: 'USDC',
+    })
+    return 'overdraft_policy=none'
+  })
+
+  let inflowId = ''
+  await step('a pending inflow does not count toward available funds', async () => {
+    const inflow = await kordio.transactions.create({
+      idempotencyKey: `sdk_validation:${stampValue}:pending-in`,
+      postings: [
+        { accountId: funding, amount: 1000, currency: 'USDC', pending: true },
+        { accountId: wallet, amount: -1000, currency: 'USDC', pending: true },
+      ],
+    })
+    inflowId = inflow.id
+    const b = await kordio.balances.get(wallet)
+    if (b.pending !== '1000' || b.available !== '0') {
+      throw new Error(`posted=${b.posted} pending=${b.pending} available=${b.available}`)
+    }
+    try {
+      await kordio.transactions.create({
+        idempotencyKey: `sdk_validation:${stampValue}:spend-pending`,
+        postings: [
+          { accountId: wallet, amount: 1, currency: 'USDC' },
+          { accountId: funding, amount: -1, currency: 'USDC' },
+        ],
+      })
+      throw new Error('spending a pending inflow should have been refused')
+    } catch (error) {
+      const e = error as { code?: string }
+      if (e.code !== 'insufficient_funds') throw error
+    }
+    return `pending=${b.pending} available=${b.available}, spend refused`
+  })
+
+  let holdId = ''
+  await step(
+    'committing the inflow funds the account and a pending outflow reserves it',
+    async () => {
+      const committed = await kordio.transactions.commit(inflowId)
+      if (committed.status !== 'posted') throw new Error(`status=${committed.status}`)
+      const hold = await kordio.transactions.create({
+        idempotencyKey: `sdk_validation:${stampValue}:hold`,
+        postings: [
+          { accountId: wallet, amount: 800, currency: 'USDC', pending: true },
+          { accountId: funding, amount: -800, currency: 'USDC', pending: true },
+        ],
+      })
+      holdId = hold.id
+      if (hold.status !== 'pending') throw new Error(`status=${hold.status}`)
+      const b = await kordio.balances.get(wallet)
+      if (b.available !== '200') throw new Error(`available=${b.available}, expected 200`)
+      try {
+        await kordio.transactions.create({
+          idempotencyKey: `sdk_validation:${stampValue}:overspend`,
+          postings: [
+            { accountId: wallet, amount: 300, currency: 'USDC' },
+            { accountId: funding, amount: -300, currency: 'USDC' },
+          ],
+        })
+        throw new Error('a write past the reserved funds should have been refused')
+      } catch (error) {
+        const e = error as { code?: string }
+        if (e.code !== 'insufficient_funds') throw error
+      }
+      return `available=${b.available} after an 800 hold, 300 refused`
+    },
+  )
+
+  await step('reversing the hold voids it and frees the funds', async () => {
+    const rev = await kordio.transactions.reverse(holdId, {
+      idempotencyKey: `sdk_validation:${stampValue}:void-hold`,
+    })
+    const original = await kordio.transactions.get(holdId)
+    if (original.status !== 'archived') throw new Error(`status=${original.status}`)
+    const voided = (original.postings ?? []).every((p) => p.voided_at)
+    if (!voided) throw new Error('pending postings were not voided')
+    const b = await kordio.balances.get(wallet)
+    if (b.available !== '1000' || b.pending !== '0') {
+      throw new Error(`pending=${b.pending} available=${b.available}`)
+    }
+    return `${rev.id}, original archived, available=${b.available}`
+  })
+
+  await step('a reversed transaction can no longer be committed', async () => {
+    try {
+      await kordio.transactions.commit(holdId)
+      throw new Error('expected a 409')
+    } catch (error) {
+      const e = error as { code?: string; status?: number }
+      if (e.code !== 'invalid_state') throw error
+      return `status=${e.status} code=${e.code}`
+    }
+  })
+
+  section('LEDGER  bulk')
+  await step('non-atomic bulk items succeed or fail independently', async () => {
+    const result = await kordio.transactions.bulk({
+      transactions: [
         {
-          external_id: `0xsdk${stampValue}`,
-          amount: '12345',
-          currency: 'USDC',
-          occurred_at: new Date().toISOString(),
+          idempotencyKey: `sdk_validation:${stampValue}:bulk-ok`,
+          postings: [
+            { accountId: cash, amount: 10, currency: 'USDC' },
+            { accountId: payable, amount: -10, currency: 'USDC' },
+          ],
+        },
+        {
+          idempotencyKey: `sdk_validation:${stampValue}:bulk-overdraft`,
+          postings: [
+            { accountId: wallet, amount: 1_000_000, currency: 'USDC' },
+            { accountId: funding, amount: -1_000_000, currency: 'USDC' },
+          ],
         },
       ],
     })
-
-    if (ingest.created_count !== 1) {
-      throw new Error(`created=${ingest.created_count} errors=${JSON.stringify(ingest.results)}`)
+    const statuses = result.results.map((r) => r.error?.code ?? r.status)
+    if (statuses[0] !== 'created' || statuses[1] !== 'insufficient_funds') {
+      throw new Error(`statuses=${statuses.join(',')}`)
     }
-
-    const page = await kordio.externalTransactions.list({ sourceId: source.id, limit: 5 })
-    const first = page.data[0]
-    if (!first) throw new Error('ingested transaction did not come back')
-    if (first.external_id !== `0xsdk${stampValue}`) {
-      throw new Error(`external_id=${first.external_id}`)
-    }
-
-    const ignored = await kordio.externalTransactions.ignore(first.id, { reason: 'validation run' })
-    if (ignored.status !== 'ignored') throw new Error(`status=${ignored.status}`)
-
-    const matches = await kordio.externalTransactions.matches(first.id)
-    return `ingested 1, status ${ignored.status}, ${matches.data.length} candidate matches`
+    return `partial_failure=${result.partial_failure} ${statuses.join(',')}`
   })
 
-  await step('rate limit headers reach the caller', async () => {
+  await step('an atomic bulk batch writes nothing when one item fails', async () => {
+    const okKey = `sdk_validation:${stampValue}:atomic-ok`
+    const before = await kordio.balances.get(cash)
+    const result = await kordio.transactions.bulk({
+      atomic: true,
+      transactions: [
+        {
+          idempotencyKey: okKey,
+          postings: [
+            { accountId: cash, amount: 10, currency: 'USDC' },
+            { accountId: payable, amount: -10, currency: 'USDC' },
+          ],
+        },
+        {
+          idempotencyKey: `sdk_validation:${stampValue}:atomic-overdraft`,
+          postings: [
+            { accountId: wallet, amount: 1_000_000, currency: 'USDC' },
+            { accountId: funding, amount: -1_000_000, currency: 'USDC' },
+          ],
+        },
+      ],
+    })
+    if (result.results.some((r) => r.status !== 'error')) {
+      throw new Error(`statuses=${result.results.map((r) => r.status).join(',')}`)
+    }
+    const after = await kordio.balances.get(cash)
+    if (after.posted !== before.posted)
+      throw new Error(`cash moved ${before.posted} -> ${after.posted}`)
+    return `atomic=${result.atomic}, every item errored, cash unchanged at ${after.posted}`
+  })
+
+  section('LEDGER  reports and metadata')
+  await step('trial balance is healthy', async () => {
+    const tb = await kordio.reports.trialBalance()
+    if (!tb.healthy) throw new Error(`residuals=${JSON.stringify(tb.totals_by_currency)}`)
+    return `${tb.accounts.length} accounts, healthy`
+  })
+
+  await step('balance sheet, income statement and cash flow answer', async () => {
+    const bs = await kordio.reports.balanceSheet()
+    const is = await kordio.reports.incomeStatement()
+    const now = new Date()
+    const cf = await kordio.reports.cashFlow({
+      from: new Date(now.getTime() - 3 * 86_400_000),
+      to: now,
+      granularity: 'day',
+    })
+    return `${bs.object}, ${is.object}, ${cf.object} with ${cf.series?.length} buckets`
+  })
+
+  await step('events tail records the writes', async () => {
+    const page = await kordio.events.list({ type: 'transaction.created', limit: 5 })
+    const first = page.data[0]
+    if (!first) throw new Error('no transaction.created events')
+    return `${first.type} ${first.id}`
+  })
+
+  await step('capabilities report the engine and dropped features', async () => {
+    const caps = await kordio.capabilities()
+    return `engine=${caps.engine} webhooks=${caps.features.webhooks} reserves=${caps.features.reserves}`
+  })
+
+  await step('every response carries a request id', async () => {
     const res = await kordio.request('GET', '/ledger/v1/accounts', { query: { limit: 1 } })
-    return `remaining=${res.rateLimit.remaining}/${res.rateLimit.limit} request_id=${res.requestId}`
+    if (!res.requestId) throw new Error('no request id')
+    return `request_id=${res.requestId}`
   })
 }
 

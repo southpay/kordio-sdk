@@ -7,12 +7,9 @@ const METHODS = ['get', 'post', 'patch', 'put', 'delete'] as const
 
 const INTENTIONALLY_UNWRAPPED: Record<string, string> = {
   'POST /oauth/token': 'handled by OAuthAuthProvider (src/ledger/auth.ts)',
-  'GET /healthz': 'exposed as KordioLedger#health',
   'GET /.well-known/oauth-authorization-server': 'discovery document, not a client call',
   'GET /.well-known/jwks.json': 'key material, fetched by verifiers not by this SDK',
   'GET /ledger/v1/_meta/capabilities': 'exposed as KordioLedger#capabilities',
-  'POST /ledger/v1/inbound/sources/{token}': 'inbound receiver endpoint, called by third parties',
-  'POST /ledger/v1/tenants/me/anonymize': 'destructive tenant operation, use client.request()',
   'DELETE /ledger/v1/transactions/{id}':
     'documented 405, the ledger is append-only; use transactions.reverse',
 }

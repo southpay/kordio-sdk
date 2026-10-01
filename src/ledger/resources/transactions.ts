@@ -11,6 +11,7 @@ import type {
   RequestConfig,
   Transaction,
   TransactionCreateParams,
+  TransactionStatus,
   WirePosting,
 } from '../types'
 
@@ -18,6 +19,13 @@ export type Expand = 'postings.account' | 'balances'
 
 export interface TransactionListParams extends ListParams {
   metadata?: Record<string, string>
+  account?: string
+  currency?: string
+  status?: TransactionStatus
+  reversed?: boolean
+  valueDateFrom?: Date | string
+  valueDateTo?: Date | string
+  includeTotal?: boolean
   expand?: readonly Expand[]
 }
 
@@ -29,18 +37,27 @@ export interface BulkItem {
   idempotencyKey: string
   postings: readonly PostingSpec[]
   metadata?: Record<string, unknown>
+  valueDate?: Date | string
 }
 
 export interface BulkEntry {
   status: 'created' | 'replayed' | 'error'
   idempotency_key?: string
   transaction?: Transaction
-  error?: { code: string; message: string; hint?: string }
+  error?: {
+    code: string
+    message: string
+    hint?: string
+    param?: string
+    details?: Record<string, unknown>
+  }
 }
 
 export interface BulkResult {
   object: 'bulk_result'
-  data: BulkEntry[]
+  atomic: boolean
+  partial_failure: boolean
+  results: BulkEntry[]
 }
 
 export interface TransactionLookupParams extends RequestConfig {
@@ -75,8 +92,8 @@ export class TransactionsResource extends Resource {
       postings,
       metadata: params.metadata,
       value_date: isoDate(params.valueDate),
-      booking_date: isoDate(params.bookingDate),
-      external_ref: params.externalRef,
+      external_refs: params.externalRefs,
+      conditions: params.conditions,
     })
 
     return await this.unwrap<Transaction>('POST', '/ledger/v1/transactions', {
@@ -122,6 +139,13 @@ export class TransactionsResource extends Resource {
       cursor: params.cursor,
       limit: params.limit,
       metadata: params.metadata,
+      account: params.account,
+      currency: params.currency,
+      status: params.status,
+      reversed: params.reversed,
+      value_date_from: isoDate(params.valueDateFrom),
+      value_date_to: isoDate(params.valueDateTo),
+      include_total: params.includeTotal,
       expand: params.expand,
     }
     return await this.page<Transaction>(
@@ -149,7 +173,11 @@ export class TransactionsResource extends Resource {
   }
 
   async bulk(
-    params: RequestConfig & { transactions: readonly BulkItem[]; validate?: boolean },
+    params: RequestConfig & {
+      transactions: readonly BulkItem[]
+      atomic?: boolean
+      validate?: boolean
+    },
   ): Promise<BulkResult> {
     const items = params.transactions.map((item, index) => {
       const postings = normalizePostings(item.postings)
@@ -161,13 +189,19 @@ export class TransactionsResource extends Resource {
             'The Idempotency-Key header is ignored on bulk writes.',
         )
       }
-      return compact({ idempotency_key: key, postings, metadata: item.metadata })
+      return compact({
+        idempotency_key: key,
+        postings,
+        metadata: item.metadata,
+        value_date: isoDate(item.valueDate),
+      })
     })
+    const body = compact({ transactions: items, atomic: params.atomic })
 
     const response = await this.raw<BulkResult>(
       'POST',
       '/ledger/v1/transactions/bulk',
-      toRequestOptions(params, { body: { transactions: items } }),
+      toRequestOptions(params, { body }),
     )
     return extractData<BulkResult>(response.data)
   }
@@ -181,12 +215,23 @@ export class TransactionsResource extends Resource {
     )
   }
 
-  async commit(id: string, config: IdempotentRequestConfig): Promise<Transaction> {
-    const key = requireIdempotencyKey(config.idempotencyKey, 'transactions.commit')
+  async commit(id: string, config?: RequestConfig): Promise<Transaction> {
     return await this.unwrap<Transaction>(
       'POST',
       `/ledger/v1/transactions/${encodePathSegment(id)}/commit`,
-      toRequestOptions(config, { idempotencyKey: key }),
+      toRequestOptions(config),
+    )
+  }
+
+  async refunds(
+    id: string,
+    params: ListParams & { expand?: readonly Expand[] } = {},
+  ): Promise<Page<Transaction>> {
+    return await this.page<Transaction>(
+      `/ledger/v1/transactions/${encodePathSegment(id)}/refunds`,
+      { cursor: params.cursor, limit: params.limit, expand: params.expand },
+      'cursor',
+      toRequestOptions(params),
     )
   }
 

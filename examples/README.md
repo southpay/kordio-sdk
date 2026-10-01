@@ -7,7 +7,7 @@ SDK. They read configuration from the environment:
 export KORDIO_CLIENT_ID=... KORDIO_CLIENT_SECRET=... KORDIO_LEDGER_ID=...
 export KORDIO_AGENT_KEY=krt_test_...
 export KORDIO_DASHBOARD_TOKEN=... KORDIO_WORKSPACE=your-workspace
-export KORDIO_BASE_URL=http://localhost:4000        # omit for production
+export KORDIO_BASE_URL=http://localhost:3005        # omit for production
 ```
 
 Run one with `bun examples/record-a-sale.ts`. Several of them write real data.
@@ -20,8 +20,8 @@ Point those at a test-mode ledger.
 | [agent-restock.ts](./agent-restock.ts) | An agent works a shortage list: asks the control layer before each purchase, books the allowed ones in the ledger, and reports each outcome so the reservation is released. Uses both APIs. | yes |
 | [agent-procurement.ts](./agent-procurement.ts) | Simulates every quote to find which ones policy would allow before committing, mints a spend token pinned to the winner, and verifies the cosignature in the settlement path. | yes |
 | [approvals.ts](./approvals.ts) | Works the review queue against a desk limit and a trusted-vendor list, denying anything far over and leaving the judgement calls for a person. | yes |
-| [webhooks.ts](./webhooks.ts) | A Bun server that verifies deliveries from both APIs with one routine, dedupes by event id, and returns 500 on a handler error so Kordio retries. | no |
-| [reconcile-custody.ts](./reconcile-custody.ts) | Ingests custody deposits, runs a windowed match, then resolves the leftovers by looking each one up by its chain reference. | yes |
+| [webhooks.ts](./webhooks.ts) | A Bun server that verifies workspace webhook deliveries, ledger and spend control events alike, dedupes by event id, and returns 500 on a handler error so Kordio retries. | no |
+| [reconcile-custody.ts](./reconcile-custody.ts) | Ties custody deposits to the books by chain reference: looks each one up, flags amount mismatches, and books the missing ones to suspense, once each. | yes |
 
 `agent-restock.ts` is the one to read if you only read one. It is the whole
 point of the two APIs together: the control layer decides, the ledger records,

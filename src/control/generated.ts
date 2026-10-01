@@ -1862,7 +1862,7 @@ export interface components {
             url?: string;
         };
         /** @enum {string} */
-        WebhookEventType: "action.requires_approval" | "action.completed" | "action.failed" | "payment.requires_approval" | "payment.executed" | "payment.failed" | "approval.resolved" | "budget.low" | "spend_token.expired";
+        WebhookEventType: "action.requires_approval" | "action.completed" | "action.failed" | "payment.requires_approval" | "payment.executed" | "payment.failed" | "approval.resolved" | "budget.low" | "spend_token.expired" | "account.created" | "account.closed" | "account.classification_changed" | "transaction.created" | "transaction.committed" | "transaction.updated" | "transaction.reversal_created" | "transaction.reversed" | "transaction.refund_created" | "period.closed" | "period.closed_forced" | "period.reopened" | "oauth_client.created" | "oauth_client.secret_rotated" | "oauth_client.deleted";
         Workspace: {
             capabilities?: ("read" | "approve" | "manage_policy" | "manage_members")[];
             /** Format: date-time */

@@ -16,7 +16,6 @@ export {
 export {
   type AccountTemplateInput,
   AccountTemplatesResource,
-  ExportsResource,
   type LedgerInput,
   LedgersResource,
   OAuthClientsResource,
@@ -27,18 +26,9 @@ export {
 export { BalancesResource } from './resources/balances'
 export { type EventListParams, EventsResource } from './resources/events'
 export { type PostingListParams, PostingsResource } from './resources/postings'
-export {
-  type ExternalTransactionItem,
-  type ExternalTransactionListParams,
-  ExternalTransactionsResource,
-  ReconciliationRunsResource,
-  type RunInput,
-  type SourceInput,
-  SourcesResource,
-} from './resources/reconciliation'
 export { type AsOfParams, type PeriodParams, ReportsResource } from './resources/reports'
-export { ReservesResource } from './resources/reserves'
 export {
+  type BulkEntry,
   type BulkItem,
   type BulkResult,
   type Expand,
@@ -46,9 +36,4 @@ export {
   type TransactionListParams,
   TransactionsResource,
 } from './resources/transactions'
-export {
-  type DeliveryListParams,
-  WebhookDeliveriesResource,
-  WebhookEndpointsResource,
-} from './resources/webhooks'
 export type * from './types'

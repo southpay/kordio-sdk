@@ -3,6 +3,46 @@
 All notable changes to this package are documented here. This project follows
 [semantic versioning](https://semver.org/).
 
+## 0.5.0
+
+Breaking. The ledger API is now served by kordio-api with TigerBeetle as its
+balance engine, and several ledger surfaces were dropped upstream. The SDK
+follows the spec.
+
+Removed:
+
+- `reserves` (`sweep`, `release`, `claw`) and `reports.reservesOutstanding`,
+  `reports.fundSegregation`.
+- `sources`, `reconciliationRuns`, `externalTransactions` and
+  `postings.reconcile`.
+- `webhookEndpoints` and `webhookDeliveries` on `KordioLedger`. Ledger events
+  are delivered by workspace webhooks; register them with
+  `KordioWorkspace#webhookEndpoints`. `events.list` and `events.get` remain.
+- `exports` and `KordioLedger#health`.
+- Types for the above, plus `AccountKindFilter`, `ReconciliationStrategy`,
+  `ExternalTransactionStatus`, `WebhookDeliveryStatus`, `ExportResource` and
+  `ExportFormat`. `accounts.list({ kind })` takes `AccountKind`
+  (`standard | restricted`); the old `reserve` value matched nothing.
+
+Changed:
+
+- `transactions.create` takes `externalRefs` and `conditions`. `externalRef`
+  and `bookingDate` are gone; the API never read them.
+- `transactions.bulk` returns `{ atomic, partial_failure, results }` as the API
+  does, and accepts `atomic` and a per-item `valueDate`.
+- `transactions.commit` no longer requires an idempotency key.
+- `accounts.categoryBalance` returns a `CategoryBalance`.
+- `reports.balanceSheet`, `incomeStatement` and `cashFlow` no longer send
+  `currency`, which the API ignores. The period reports take `granularity`.
+
+Added: `accounts.close` and `transactions.refunds`, and `accounts.update`
+accepts every field the API lets you change. Also added: transaction list filters (`account`, `currency`, `status`, `reversed`,
+`valueDateFrom`, `valueDateTo`, `includeTotal`), account list filters
+(`parentId`, `ledgerableType`, `ledgerableId`), `force` on period closes,
+`description` and `archived_at` on ledgers, and the `ExternalRef`,
+`TransactionCondition`, `TransactionStatus`, `ReportGranularity` and
+`ReportBucket` types.
+
 ## 0.1.2
 
 Fixes a broken base path. The ledger is served under `/api/v1` in production,

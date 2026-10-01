@@ -4,10 +4,11 @@ import { splitConfig, toRequestOptions } from '../request'
 import type {
   Account,
   AccountInput,
-  AccountKindFilter,
+  AccountKind,
   AccountStatement,
   AccountType,
   Balance,
+  CategoryBalance,
   FundClassification,
   ListParams,
   Posting,
@@ -17,8 +18,11 @@ import type {
 export interface AccountListParams extends ListParams {
   type?: AccountType
   currency?: string
-  kind?: AccountKindFilter
+  kind?: AccountKind
   counterpartyRef?: string
+  parentId?: string
+  ledgerableType?: string
+  ledgerableId?: string
   fundClassification?: FundClassification
   custodyProvider?: string
 }
@@ -26,6 +30,12 @@ export interface AccountListParams extends ListParams {
 export interface AccountUpdateParams extends RequestConfig {
   name?: string
   metadata?: Record<string, unknown>
+  parent_id?: string | null
+  ledgerable_type?: string | null
+  ledgerable_id?: string | null
+  fund_classification?: FundClassification
+  custody_provider?: string | null
+  custody_external_id?: string | null
 }
 
 export interface StatementParams extends RequestConfig {
@@ -61,6 +71,15 @@ export class AccountsResource extends Resource {
     )
   }
 
+  async close(id: string, params: RequestConfig & { closedByLabel: string }): Promise<Account> {
+    if (!params.closedByLabel) throw new TypeError('accounts.close requires `closedByLabel`.')
+    return await this.unwrap<Account>(
+      'POST',
+      `/ledger/v1/accounts/${encodePathSegment(id)}/close`,
+      toRequestOptions(params, { body: { closed_by_label: params.closedByLabel } }),
+    )
+  }
+
   async list(params: AccountListParams = {}): Promise<Page<Account>> {
     const query = {
       cursor: params.cursor,
@@ -69,6 +88,9 @@ export class AccountsResource extends Resource {
       currency: params.currency,
       kind: params.kind,
       counterparty_ref: params.counterpartyRef,
+      parent_id: params.parentId,
+      ledgerable_type: params.ledgerableType,
+      ledgerable_id: params.ledgerableId,
       fund_classification: params.fundClassification,
       custody_provider: params.custodyProvider,
     }
@@ -88,8 +110,8 @@ export class AccountsResource extends Resource {
     )
   }
 
-  async categoryBalance(id: string, config?: RequestConfig): Promise<Balance> {
-    return await this.unwrap<Balance>(
+  async categoryBalance(id: string, config?: RequestConfig): Promise<CategoryBalance> {
+    return await this.unwrap<CategoryBalance>(
       'GET',
       `/ledger/v1/accounts/${encodePathSegment(id)}/category_balance`,
       toRequestOptions(config),

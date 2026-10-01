@@ -49,56 +49,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/healthz": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Liveness + DB probe */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Healthy */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            checks?: {
-                                database?: boolean;
-                            };
-                            /** @enum {string} */
-                            status?: "ok";
-                            version?: string;
-                        };
-                    };
-                };
-                /** @description Degraded (database unreachable) */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/ledger/v1/_meta/capabilities": {
         parameters: {
             query?: never;
@@ -107,20 +57,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Capabilities, guarantees, and limits of this deployment
+         * Capabilities of this deployment
          * @description Self-describing contract surface. Hit once at boot to discover
-         *     what's wired up, what the ledger promises, and what the hard
-         *     limits are, instead of hardcoding assumptions.
+         *     which features are available to your organization instead of
+         *     hardcoding assumptions.
          *
-         *     Three independent version fields:
-         *
-         *       * `ledger_capabilities_version`: calendar-versioned shape of
-         *         this document. Bumps when sections are added/renamed/removed.
-         *         Pin against this if you parse the body.
-         *       * `api_version`: the URL-prefix version (`v1`). Bumps on
-         *         breaking changes to resource paths or shapes.
-         *       * `release`: the running build. Useful for debugging; do not
-         *         gate behavior on it.
+         *     `ledger_capabilities_version` is the calendar version of this
+         *     document's shape. Pin against it if you parse the body.
+         *     `api_version` is the URL-prefix version (`v1`).
          */
         get: {
             parameters: {
@@ -140,92 +84,66 @@ export interface paths {
                         "application/json": {
                             /** @example v1 */
                             api_version: string;
-                            auth: {
-                                algorithm?: string;
-                                discovery?: string;
-                                grant_types?: string[];
-                                scheme?: string;
-                                scopes?: string[];
+                            conditional_posting: {
+                                /**
+                                 * @example [
+                                 *       "lock_version",
+                                 *       "min_available_balance",
+                                 *       "max_available_balance"
+                                 *     ]
+                                 */
+                                condition_keys?: string[];
+                                /** @example precondition_failed */
+                                error_code_on_mismatch?: string;
                             };
-                            consistency: {
-                                /** @example exactly-once-effect */
-                                idempotency?: string;
-                                /** @example serialized */
-                                per_account_writes?: string;
-                                /** @example monotonic */
-                                read_after_write?: string;
-                                /** @example all-or-nothing */
-                                within_transaction?: string;
-                            };
+                            /**
+                             * @description The balance engine that enforces double entry and overdraft policy.
+                             * @example tigerbeetle
+                             */
+                            engine: string;
+                            /**
+                             * @description Feature flags. Values are booleans, except `webhooks`,
+                             *     which is `"workspace"`: ledger events are delivered by
+                             *     your workspace's Kordio webhooks, not by ledger-level
+                             *     endpoints. `reconciliation`, `reserves` and `exports`
+                             *     are `false`.
+                             * @example {
+                             *       "idempotency_keys": true,
+                             *       "bulk_transactions": true,
+                             *       "period_close": true,
+                             *       "webhooks": "workspace",
+                             *       "reconciliation": false,
+                             *       "reserves": false,
+                             *       "exports": false
+                             *     }
+                             */
                             features: {
-                                [key: string]: boolean;
+                                [key: string]: boolean | string;
                             };
-                            /**
-                             * @description What the ledger promises about correctness. Each key
-                             *     is a property the deployment will not violate.
-                             */
-                            guarantees: {
-                                append_only?: boolean;
-                                balanced_per_currency?: boolean;
-                                double_entry_enforced_at?: ("application" | "database_trigger")[];
-                                replay_safe?: boolean;
-                                serializable_per_account?: boolean;
-                            };
-                            /** @example 2026-01 */
+                            /** @example 2026-10-01 */
                             ledger_capabilities_version: string;
-                            limits: {
-                                [key: string]: unknown;
-                            };
-                            money_representation: {
-                                /** @example debit | credit */
-                                direction_field?: string;
-                                implicit_conversion?: boolean;
-                                /** @enum {string} */
-                                rounding?: "never";
-                                signed?: boolean;
-                                /** @example numeric(38, 0) */
-                                storage?: string;
-                                /** @enum {string} */
-                                unit?: "minor";
-                            };
+                            /** @description True when your plan permits writes to live ledgers. Live data stays readable either way. */
+                            live_mode: boolean;
                             /** @enum {string} */
-                            object?: "capabilities";
-                            pagination: {
-                                /** @enum {string} */
-                                cursor?: "opaque";
-                                default_limit?: number;
-                                /** @enum {string} */
-                                direction?: "forward_only";
-                                max_limit?: number;
-                                /** @enum {string} */
-                                style?: "cursor";
+                            object: "capabilities";
+                            organization_model: {
+                                /**
+                                 * @example [
+                                 *       "organization",
+                                 *       "ledger",
+                                 *       "account|transaction|posting"
+                                 *     ]
+                                 */
+                                hierarchy?: string[];
+                                many_ledgers_per_org?: boolean;
+                                /** @example ledger */
+                                mode_lives_on?: string;
+                                modes_per_org?: ("live" | "test")[];
                             };
-                            reconciliation: {
-                                default_matcher?: {
-                                    fields?: string[];
-                                    value_date_window_seconds?: number;
-                                };
-                                manual_marking?: boolean;
-                                sources?: string;
-                            };
-                            /** @example 0.1.0 */
-                            release: string;
-                            /**
-                             * @description Lifecycle state of the caller's tenant. `suspended`
-                             *     and `terminated` tenants can still read (so they can
-                             *     export); writes are rejected with `tenant_suspended`
-                             *     (403). Dashboards should surface a banner when this
-                             *     is not `active`.
-                             * @enum {string}
-                             */
-                            tenant_status?: "active" | "suspended" | "terminated";
-                            time: {
-                                booking_date_precision?: string;
-                                /** @enum {string} */
-                                clock?: "utc";
-                                period_close_enforced_at?: string[];
-                                value_date_precision?: string;
-                            };
+                            /** @description Your organization's current plan. */
+                            plan: string;
+                            /** @enum {string} */
+                            tenant_status: "active";
                         };
                     };
                 };
@@ -255,7 +173,7 @@ export interface paths {
                      *     construct cursors client-side; their encoding is implementation
                      *     detail and may change between releases. Cursors are stable for
                      *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
+                     *     archived resource still paginates correctly. It points at a
                      *     position, not at a row). No documented TTL; treat cursors as
                      *     valid until the next forward-incompatible API change.
                      */
@@ -338,18 +256,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            accounting_type?: string;
-                            allowed_currencies?: string[];
-                            balance_non_negative?: boolean;
-                            /** Format: date-time */
-                            created_at?: string;
-                            description?: string | null;
-                            metadata?: Record<string, unknown>;
-                            name?: string;
-                            /** @enum {string} */
-                            object?: "account_template";
-                        };
+                        "application/json": components["schemas"]["AccountTemplate"];
                     };
                 };
                 409: components["responses"]["Error"];
@@ -413,7 +320,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description Filter by `counterparty_ref` (typically combined with `kind=reserve`). */
+                    /** @description Filter by `counterparty_ref`. */
                     counterparty_ref?: string;
                     /** @description Filter by currency ticker. */
                     currency?: string;
@@ -422,7 +329,7 @@ export interface paths {
                      *     construct cursors client-side; their encoding is implementation
                      *     detail and may change between releases. Cursors are stable for
                      *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
+                     *     archived resource still paginates correctly. It points at a
                      *     position, not at a row). No documented TTL; treat cursors as
                      *     valid until the next forward-incompatible API change.
                      */
@@ -431,12 +338,13 @@ export interface paths {
                     custody_provider?: string;
                     /** @description Filter by `fund_classification`. */
                     fund_classification?: "client_held" | "operator" | "neutral";
-                    /**
-                     * @description Filter by `account_kind`. Use `kind=reserve` to list reserve
-                     *     accounts, optionally narrowed by `counterparty_ref`.
-                     */
-                    kind?: "standard" | "reserve";
+                    /** @description Filter by `account_kind`. */
+                    kind?: "standard" | "restricted";
+                    ledgerable_id?: string;
+                    ledgerable_type?: string;
                     limit?: components["parameters"]["Limit"];
+                    /** @description Filter to direct children of this account. */
+                    parent_id?: string;
                     /** @description Filter by accounting type. */
                     type?: "asset" | "liability" | "revenue" | "expense" | "equity";
                 };
@@ -545,7 +453,60 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update an account
+         * @description Updates the mutable fields of an account. `id`, `type`,
+         *     `currency` and the overdraft settings cannot change; other
+         *     fields in the body are ignored. A change to
+         *     `fund_classification`, `custody_provider` or
+         *     `custody_external_id` emits `account.classification_changed`.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @example accounts_receivable:acme */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccountUpdate"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Account"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+                /** @description `precondition_failed`: the account was modified concurrently. Retry. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description `invalid_request`: a blank name, non-object metadata, an unknown classification, or only one of the custody pair. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/ledger/v1/accounts/{id}/balance": {
@@ -558,8 +519,9 @@ export interface paths {
         /**
          * Get an account's balance (current or point-in-time)
          * @description Pass `?at=<ISO 8601 timestamp>` for a historical balance computed
-         *     from `value_date` on each posting. Without `at`, returns the
-         *     current balance from the actor's in-memory state.
+         *     from `value_date` on each posting; the response then carries
+         *     `as_of`. Without `at`, returns the current balance from the
+         *     balance engine.
          */
         get: {
             parameters: {
@@ -608,17 +570,17 @@ export interface paths {
         };
         /**
          * Get the rolled-up balance for an account category
-         * @description Returns the aggregate balance across all accounts under the
-         *     same category as the addressed account (e.g. the sum of every
-         *     `accounts_receivable:*` account). Useful for treasury-level
-         *     dashboards that want a single number per category.
+         * @description Sums the balance of the addressed account and every account
+         *     below it through `parent_id`, at any depth. All members must
+         *     share one currency; a mixed-currency subtree returns
+         *     `invalid_request`.
          */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @example accounts_receivable:acme */
+                    /** @example accounts_receivable */
                     id: string;
                 };
                 cookie?: never;
@@ -631,14 +593,90 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Balance"];
+                        "application/json": components["schemas"]["CategoryBalance"];
                     };
                 };
                 404: components["responses"]["NotFound"];
+                422: components["responses"]["Error"];
             };
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ledger/v1/accounts/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close an account
+         * @description Permanently closes an account. Both its posted and pending
+         *     balance must be zero, or the call returns
+         *     `409 account_balance_nonzero`. A closed account rejects new
+         *     postings with `account_closed`. Closing an account that is
+         *     already closed returns it unchanged. Emits `account.closed`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @example accounts_receivable:acme */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description Person or system closing the account. Recorded for audit.
+                         * @example controller@acme
+                         */
+                        closed_by_label: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Closed (or already closed) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Account"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+                /** @description account_balance_nonzero */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description `invalid_request`: `closed_by_label` is missing. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -661,7 +699,7 @@ export interface paths {
                      *     construct cursors client-side; their encoding is implementation
                      *     detail and may change between releases. Cursors are stable for
                      *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
+                     *     archived resource still paginates correctly. It points at a
                      *     position, not at a row). No documented TTL; treat cursors as
                      *     valid until the next forward-incompatible API change.
                      */
@@ -780,7 +818,7 @@ export interface paths {
                      *     construct cursors client-side; their encoding is implementation
                      *     detail and may change between releases. Cursors are stable for
                      *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
+                     *     archived resource still paginates correctly. It points at a
                      *     position, not at a row). No documented TTL; treat cursors as
                      *     valid until the next forward-incompatible API change.
                      */
@@ -863,504 +901,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/ledger/v1/exports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Queue an async export of the tenant's data
-         * @description Queues a background job that streams the tenant's data
-         *     (accounts, transactions, postings, events, period_closes,
-         *     reconciliation_runs, webhook_endpoints, with secrets stripped) into
-         *     NDJSON files and returns signed `download_urls` valid for 7
-         *     days. Poll `GET /v1/exports/{id}` to wait for `status: "ready"`.
-         *
-         *     Idempotent on `Idempotency-Key`: replaying the same key returns
-         *     the original row (with header `idempotent-replayed: true`).
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        /**
-                         * @default ndjson
-                         * @enum {string}
-                         */
-                        format?: "ndjson";
-                        /** @description Defaults to all known resources when omitted. */
-                        resources?: ("accounts" | "transactions" | "postings" | "events" | "period_closes" | "reconciliation_runs" | "webhook_endpoints")[];
-                    };
-                };
-            };
-            responses: {
-                /** @description Idempotency-Key replay. */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            data?: components["schemas"]["Export"];
-                        };
-                    };
-                };
-                /** @description Export queued. */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            data?: components["schemas"]["Export"];
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/exports/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Fetch an export
-         * @description Returns the export row. Poll until `status` is `ready`, then
-         *     download from `download_urls` before `expires_at`.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            data?: components["schemas"]["Export"];
-                        };
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/external_transactions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List external transactions
-         * @description `status=open` is the break list. Filter by `source_id`,
-         *     `currency`, and `from`/`to` on `occurred_at`. Newest first.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    currency?: string;
-                    /**
-                     * @description Opaque token from a prior page's `next_cursor`. Do not decode or
-                     *     construct cursors client-side; their encoding is implementation
-                     *     detail and may change between releases. Cursors are stable for
-                     *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
-                     *     position, not at a row). No documented TTL; treat cursors as
-                     *     valid until the next forward-incompatible API change.
-                     */
-                    cursor?: components["parameters"]["Cursor"];
-                    from?: string;
-                    limit?: components["parameters"]["Limit"];
-                    source_id?: string;
-                    status?: "open" | "matched" | "ignored";
-                    to?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description A page of external transactions */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["List"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/external_transactions/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch an external transaction */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description External transaction */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ExternalTransaction"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/external_transactions/{id}/ignore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Exclude an external transaction from matching
-         * @description Marks an open row `ignored` (provider fees booked elsewhere,
-         *     test rows). Idempotent on already-ignored rows. Matched rows
-         *     are rejected with `invalid_state`; unmatch first. Emits
-         *     `external_transaction.ignored`.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        reason?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Ignored external transaction */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ExternalTransaction"];
-                    };
-                };
-                /** @description Row is matched (`invalid_state`) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/external_transactions/{id}/match": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Manually match an external transaction to postings
-         * @description The postings must be unreconciled, share the row's currency,
-         *     and sum exactly to its amount; otherwise 422 with the residual
-         *     in the hint. Records a match with strategy `manual` and emits
-         *     `reconciliation.match_created`.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        note?: string;
-                        posting_ids: number[];
-                    };
-                };
-            };
-            responses: {
-                /** @description External transaction with the new match embedded */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ExternalTransaction"];
-                    };
-                };
-                /** @description Row is not open (`invalid_state`) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Postings do not sum to the external amount */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/external_transactions/{id}/matches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Match audit trail for an external transaction
-         * @description Includes reversed matches (`reversed_at` set).
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description List of reconciliation matches, newest first */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/external_transactions/{id}/unmatch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Undo a match
-         * @description Reopens the matched postings, stamps the match row `reversed_at`
-         *     (kept for audit), returns the row to `open`, and emits
-         *     `reconciliation.match_reversed`.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        reason?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Reopened external transaction */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ExternalTransaction"];
-                    };
-                };
-                /** @description Row is not matched (`invalid_state`) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/inbound/sources/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Hosted inbound push endpoint
-         * @description Unauthenticated except for the per-source HMAC signature (see
-         *     the enable endpoint). Unknown or disabled tokens 404. Never
-         *     runs matching; queue a run or rely on your scheduled runs.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    token: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Per-batch counts */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": unknown;
-                    };
-                };
-                /** @description Missing or invalid signature */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Unknown or disabled inbound endpoint */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/ledger/v1/ledgers": {
         parameters: {
             query?: never;
@@ -1368,21 +908,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List ledgers in the caller's organization */
+        /**
+         * List ledgers in the caller's organization
+         * @description Returns every ledger in one page, oldest first.
+         */
         get: {
             parameters: {
                 query?: {
-                    /**
-                     * @description Opaque token from a prior page's `next_cursor`. Do not decode or
-                     *     construct cursors client-side; their encoding is implementation
-                     *     detail and may change between releases. Cursors are stable for
-                     *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
-                     *     position, not at a row). No documented TTL; treat cursors as
-                     *     valid until the next forward-incompatible API change.
-                     */
-                    cursor?: components["parameters"]["Cursor"];
-                    limit?: components["parameters"]["Limit"];
+                    include_archived?: boolean;
+                    mode?: "live" | "test";
                 };
                 header?: never;
                 path?: never;
@@ -1413,6 +947,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
+                        description?: string;
                         metadata?: {
                             [key: string]: unknown;
                         };
@@ -1430,9 +965,10 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, unknown>;
+                        "application/json": components["schemas"]["Ledger"];
                     };
                 };
+                422: components["responses"]["Error"];
             };
         };
         delete?: never;
@@ -1490,6 +1026,12 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
+                        /**
+                         * Format: date-time
+                         * @description Set to archive the ledger; `null` to unarchive.
+                         */
+                        archived_at?: string | null;
+                        description?: string;
                         metadata?: {
                             [key: string]: unknown;
                         };
@@ -1520,24 +1062,13 @@ export interface paths {
         };
         /**
          * List OAuth clients
-         * @description Lists every client in the tenant. Secrets are **never** returned
-         *     on this endpoint, only on create + rotate. Requires
-         *     `ledger:clients:read`.
+         * @description Lists every client in the organization in one page. Secrets are
+         *     **never** returned on this endpoint, only on create + rotate.
+         *     Requires `ledger:clients:read`.
          */
         get: {
             parameters: {
                 query?: {
-                    /**
-                     * @description Opaque token from a prior page's `next_cursor`. Do not decode or
-                     *     construct cursors client-side; their encoding is implementation
-                     *     detail and may change between releases. Cursors are stable for
-                     *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
-                     *     position, not at a row). No documented TTL; treat cursors as
-                     *     valid until the next forward-incompatible API change.
-                     */
-                    cursor?: components["parameters"]["Cursor"];
-                    limit?: components["parameters"]["Limit"];
                     /** @description Optional filter, only clients of the given mode. */
                     mode?: "live" | "test";
                 };
@@ -1564,25 +1095,11 @@ export interface paths {
          * @description Mints a new client. The response includes `client_secret`, the
          *     **only** time it is returned. Store it before discarding the
          *     response. Requires `ledger:clients:write`.
-         *
-         *     `Idempotency-Key` header is accepted.
          */
         post: {
             parameters: {
                 query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
+                header?: never;
                 path?: never;
                 cookie?: never;
             };
@@ -1663,11 +1180,19 @@ export interface paths {
             requestBody?: never;
             responses: {
                 /** @description Removed */
-                204: {
+                200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** @enum {boolean} */
+                            deleted: true;
+                            id: string;
+                            /** @enum {string} */
+                            object: "oauth_client";
+                        };
+                    };
                 };
                 404: components["responses"]["NotFound"];
             };
@@ -1694,24 +1219,11 @@ export interface paths {
          *
          *     Re-rotating before the prior overlap window closes is rejected
          *     with `rotation_in_progress` (409) to prevent a 3-key chain.
-         *     `Idempotency-Key` header is accepted.
          */
         post: {
             parameters: {
                 query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
+                header?: never;
                 path: {
                     id: string;
                 };
@@ -1785,7 +1297,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List period closes */
+        /**
+         * List period closes
+         * @description Returns every close in one page. List entries omit `trial_balance`.
+         */
         get: {
             parameters: {
                 query?: {
@@ -1813,10 +1328,15 @@ export interface paths {
          * Close a period
          * @description Snapshots the trial balance at `period_end` and locks the
          *     window. After close, any new transaction with `value_date`
-         *     inside the window is rejected with `period_closed`. Enforced
-         *     both in the coordinator and by a DB trigger.
+         *     inside the window is rejected with `period_closed`.
          *
-         *     Overlapping closes are rejected with `already_exists`.
+         *     A period whose trial balance does not net to zero per currency
+         *     is rejected with `period_close_imbalanced`; pass `force: true`
+         *     to record the imbalanced close deliberately; it emits
+         *     `period.closed_forced` as well as `period.closed`. Overlapping closes
+         *     are rejected with `already_exists`. Writes into the window that
+         *     are still being applied return `in_progress`. Requires the
+         *     `ledger:period_close` scope.
          */
         post: {
             parameters: {
@@ -1833,6 +1353,11 @@ export interface paths {
                          * @example controller@acme
                          */
                         closed_by_label: string;
+                        /**
+                         * @description Close even if the trial balance is imbalanced. Recorded as `forced`.
+                         * @default false
+                         */
+                        force?: boolean;
                         note?: string;
                         /** Format: date-time */
                         period_end: string;
@@ -1851,8 +1376,17 @@ export interface paths {
                         "application/json": components["schemas"]["PeriodClose"];
                     };
                 };
-                /** @description Overlapping close already exists */
+                /** @description `already_exists` (overlapping close) or `in_progress`. */
                 409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description `period_close_imbalanced`, or invalid bounds. */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1921,7 +1455,7 @@ export interface paths {
          * @description Records who reopened and when. Use sparingly; every reopen
          *     invalidates a previously-signed period report. The original
          *     close row is preserved with `reopened_at` + `reopened_by_label`
-         *     for audit.
+         *     for audit. Requires the `ledger:period_close` scope.
          */
         post: {
             parameters: {
@@ -1951,7 +1485,7 @@ export interface paths {
                     };
                 };
                 404: components["responses"]["NotFound"];
-                /** @description Already reopened */
+                /** @description Already reopened (`already_exists`) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -1977,9 +1511,8 @@ export interface paths {
         };
         /**
          * List postings, tenant-wide
-         * @description Cross-account list. Filter with `reconciled=true|false` to narrow
-         *     to settled or open postings; pass `account=<id>` to scope to one
-         *     account. For per-account history with the same tags filter, use
+         * @description Cross-account list, newest first. Pass `account=<id>` to scope
+         *     to one account. For per-account history with a tags filter, use
          *     `GET /v1/accounts/:id/postings`.
          */
         get: {
@@ -2000,7 +1533,7 @@ export interface paths {
                      *     construct cursors client-side; their encoding is implementation
                      *     detail and may change between releases. Cursors are stable for
                      *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
+                     *     archived resource still paginates correctly. It points at a
                      *     position, not at a row). No documented TTL; treat cursors as
                      *     valid until the next forward-incompatible API change.
                      */
@@ -2015,7 +1548,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description A page of postings, oldest first */
+                /** @description A page of postings, newest first */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -2024,244 +1557,6 @@ export interface paths {
                         "application/json": components["schemas"]["List"];
                     };
                 };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/postings/{id}/reconciliations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Manually mark a posting as reconciled
-         * @description For ad-hoc cleanups when the automated matcher couldn't pair an
-         *     item. Already-reconciled postings are returned untouched.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: number;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        external_reference?: string;
-                        /** Format: uuid */
-                        reconciliation_run_id?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Updated posting */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/reconciliation_runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List historic reconciliation runs */
-        get: {
-            parameters: {
-                query?: {
-                    limit?: components["parameters"]["Limit"];
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description List of runs (no embedded snapshot; fetch by id for that) */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["List"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Run a reconciliation
-         * @description Match a snapshot of external items against unreconciled
-         *     postings. Matching is per-currency, per-amount, with a default
-         *     24-hour `value_date` window. Optional `account_id` on each item
-         *     narrows the candidate pool.
-         *
-         *     The response surfaces three sets: `matched`, `unmatched_external`
-         *     (items we couldn't pair), and `unmatched_internal` (postings in
-         *     the time window that no external item claimed; only populated
-         *     when `from`/`to` bound the query).
-         *
-         *     Idempotent: matched postings get marked once. Items are stored
-         *     as external transactions keyed by `(source, external_id)`.
-         *     Re-running the same snapshot reports already-matched items in
-         *     `matched` with their original attribution; nothing is
-         *     double-marked.
-         *
-         *     Items may carry `reference_rail`, `reference_kind`, and
-         *     `reference_value` (all three or none). When the triple resolves
-         *     to a transaction external ref, that posting is matched first
-         *     with strategy `external_ref` (exact amount required).
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        /**
-                         * @description Absolute minor-unit tolerance budget for auto-resolving small
-                         *     breaks. Accepts a decimal string (recommended) or an integer on
-                         *     write; returned as a string. A match whose |sum(postings) -
-                         *     external_amount| residual is <= this value is treated as matched
-                         *     and emits `reconciliation.break_auto_resolved`. Default "0" =
-                         *     strictly equal.
-                         * @default 0
-                         */
-                        auto_resolve_below_minor_units?: string | number;
-                        /**
-                         * @description Free-form pointer back to the snapshot in the external system.
-                         * @example cobo:2026-05-14:eth
-                         */
-                        external_reference?: string;
-                        /** Format: date-time */
-                        from?: string;
-                        items: {
-                            /**
-                             * @description Optional hint to narrow the candidate set.
-                             * @example cash:usd
-                             */
-                            account_id?: string;
-                            /**
-                             * @description External amount in minor units. Accepts a decimal string (recommended) or an integer on write. Returned as a string.
-                             * @example 10000000
-                             */
-                            amount: string | number;
-                            /** Format: date-time */
-                            at: string;
-                            /** @example USDC */
-                            currency: string;
-                            /** @example dep_abc123 */
-                            external_id: string;
-                            /** @example charge */
-                            reference_kind?: string;
-                            /** @example stripe */
-                            reference_rail?: string;
-                            /** @example ch_3Nq */
-                            reference_value?: string;
-                        }[];
-                        note?: string;
-                        /**
-                         * @description Name the external system you're reconciling against.
-                         * @example cobo
-                         */
-                        source: string;
-                        /**
-                         * @description Matching strategy. `exact` pairs an external row with at most one
-                         *     posting (default, pre-existing behavior). `sum_in_window` pairs an
-                         *     external row with a subset of up to five postings whose summed
-                         *     amount equals the external amount within
-                         *     `auto_resolve_below_minor_units`, with every posting in the subset
-                         *     inside `+/- window_seconds` of the external row's `at`.
-                         * @default exact
-                         * @enum {string}
-                         */
-                        strategy?: "exact" | "sum_in_window";
-                        /** Format: date-time */
-                        to?: string;
-                        /**
-                         * @description Allowed |posting.value_date - item.at| in seconds.
-                         * @default 86400
-                         */
-                        window_seconds?: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Run executed */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ReconciliationRun"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/reconciliation_runs/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch a single run with its snapshot */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Full run */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ReconciliationRun"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
             };
         };
         put?: never;
@@ -2282,14 +1577,13 @@ export interface paths {
         /**
          * Balance sheet (assets / liabilities / equity)
          * @description Point-in-time balance sheet computed against `value_date`. Pass
-         *     `?at=` for a historical view; omit for current. `currency` may
-         *     be passed to scope the report to a single currency.
+         *     `?at=` for a historical view; omit for current. Revenue minus
+         *     expense is reported as `retained_earnings`.
          */
         get: {
             parameters: {
                 query?: {
                     at?: string;
-                    currency?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2325,15 +1619,30 @@ export interface paths {
         };
         /**
          * Cash flow over a period
-         * @description Cash movement broken out by category over `[from, to)`. Uses
-         *     `value_date`.
+         * @description Net movement on asset accounts over `[from, to)`, using
+         *     `value_date`, classified as operating, investing, financing or
+         *     uncategorized by the type of the counterparty legs. Pending
+         *     postings are excluded. Pass `granularity` with both bounds to
+         *     add a `series` of per-period buckets.
          */
         get: {
             parameters: {
-                query: {
-                    currency?: string;
-                    from: string;
-                    to: string;
+                query?: {
+                    /**
+                     * @description Inclusive lower bound on `value_date`. Omit to start at the beginning of the ledger.
+                     * @example 2026-04-01T00:00:00Z
+                     */
+                    from?: components["parameters"]["ReportFrom"];
+                    /**
+                     * @description Adds a `series` of per-period buckets. Requires both `from` and
+                     *     `to`. At most 400 buckets.
+                     */
+                    granularity?: components["parameters"]["Granularity"];
+                    /**
+                     * @description Exclusive upper bound on `value_date`. Defaults to now.
+                     * @example 2026-05-01T00:00:00Z
+                     */
+                    to?: components["parameters"]["ReportTo"];
                 };
                 header?: never;
                 path?: never;
@@ -2360,64 +1669,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/ledger/v1/reports/fund_segregation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Funds segregation snapshot
-         * @description Per-currency totals of `client_held` vs. `custody_held` accounts
-         *     plus a delta and a custody breakdown. Feeds regulator-style
-         *     client-money reports (EMI, CASP, etc.). The platform itself
-         *     does not interpret the classification beyond grouping.
-         *
-         *     Classifications and custody tags are set by the customer on
-         *     accounts or inherited from account templates. The default
-         *     classification is `neutral`, so existing ledgers report an
-         *     empty `by_currency` until accounts are tagged.
-         *
-         *     On-demand only at v1: no snapshot history is kept (see Q2 of
-         *     `docs/decisions/2026-05-27-platform-open-questions.md`).
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Restrict the report to a single currency. */
-                    currency?: string;
-                    /**
-                     * @description Point-in-time cutoff (uses `value_date`, not `booking_date`).
-                     *     Defaults to now.
-                     */
-                    value_date?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Fund segregation snapshot */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["FundSegregationReport"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/ledger/v1/reports/income_statement": {
         parameters: {
             query?: never;
@@ -2427,15 +1678,29 @@ export interface paths {
         };
         /**
          * Income statement (revenue / expense over a period)
-         * @description Revenue and expense totals over `[from, to)`. Both `from` and
-         *     `to` are ISO 8601 instants and use `value_date` for inclusion.
+         * @description Revenue and expense totals over `[from, to)`, using
+         *     `value_date` for inclusion. `from` defaults to the beginning of
+         *     the ledger, `to` to now. Pass `granularity` with both bounds to
+         *     add a `series` of per-period buckets.
          */
         get: {
             parameters: {
-                query: {
-                    currency?: string;
-                    from: string;
-                    to: string;
+                query?: {
+                    /**
+                     * @description Inclusive lower bound on `value_date`. Omit to start at the beginning of the ledger.
+                     * @example 2026-04-01T00:00:00Z
+                     */
+                    from?: components["parameters"]["ReportFrom"];
+                    /**
+                     * @description Adds a `series` of per-period buckets. Requires both `from` and
+                     *     `to`. At most 400 buckets.
+                     */
+                    granularity?: components["parameters"]["Granularity"];
+                    /**
+                     * @description Exclusive upper bound on `value_date`. Defaults to now.
+                     * @example 2026-05-01T00:00:00Z
+                     */
+                    to?: components["parameters"]["ReportTo"];
                 };
                 header?: never;
                 path?: never;
@@ -2450,47 +1715,6 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["IncomeStatementReport"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/reports/reserves_outstanding": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Total reserved per currency per counterparty
-         * @description Sums the posted balance of every `account_kind = "reserve"`
-         *     account in the ledger, grouped by `(counterparty_ref, currency)`.
-         *     Empty when no reserves exist.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Reserves outstanding report */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ReservesOutstandingReport"];
                     };
                 };
             };
@@ -2554,696 +1778,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/ledger/v1/reserves": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Sweep funds into a reserve account
-         * @description Creates a reserve account (if it doesn't yet exist) for the
-         *     `(template, counterparty_ref, currency)` triple and books a
-         *     balanced transaction that debits the source account and credits
-         *     the reserve. Reserves model holdbacks, escrow, FX holds, and any
-         *     other case where unrestricted funds need to be earmarked for a
-         *     named counterparty.
-         *
-         *     Listing and balance reads use the standard `/v1/accounts`
-         *     surface (`?kind=reserve&counterparty_ref=<x>`). The platform
-         *     does NOT auto-release on `expires_at`; that's customer policy.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ReserveSweepInput"];
-                };
-            };
-            responses: {
-                /** @description Reserve sweep booked */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ReserveOpResult"];
-                    };
-                };
-                /**
-                 * @description `reserve_insufficient_funds` (source would go negative),
-                 *     `reserve_currency_mismatch` (source currency != reserve
-                 *     currency), or `account_template_unknown`.
-                 */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/reserves/{id}/claw": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Claw funds from a reserve into an operator account
-         * @description Books a balanced transaction debiting the reserve and crediting
-         *     `operator_account_id`. Used when the held-back funds are
-         *     forfeited to the operator (e.g. a chargeback lost by the
-         *     merchant, an expired escrow window). The `reason_code` is
-         *     persisted in transaction metadata for audit.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ReserveClawInput"];
-                };
-            };
-            responses: {
-                /** @description Claw booked */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ReserveOpResult"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-                /**
-                 * @description `reserve_release_exceeds_balance` when amount exceeds the
-                 *     reserve's posted balance.
-                 */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/reserves/{id}/release": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Release funds from a reserve to a target account
-         * @description Books a balanced transaction debiting the reserve and crediting
-         *     `target_account_id`. The target need not be the original source.
-         *     Idempotent on `Idempotency-Key`.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    /** @example reserve:merchant_payable:acme:usdc */
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ReserveReleaseInput"];
-                };
-            };
-            responses: {
-                /** @description Release booked */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ReserveOpResult"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-                /**
-                 * @description `reserve_release_exceeds_balance` when amount exceeds the
-                 *     reserve's posted balance, or `reserve_currency_mismatch`.
-                 */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/sources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List reconciliation sources */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description List of sources */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["List"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Create a source
-         * @description A source names an external system you reconcile against
-         *     (a PSP, bank, exchange). Per-source defaults (`default_strategy`,
-         *     `default_window_seconds`, `default_tolerance_minor_units`,
-         *     `default_account_id`) apply to source-scoped runs.
-         *
-         *     Names are unique per ledger, lowercased. Creating a name that an
-         *     inline `POST /v1/reconciliation_runs` already used implicitly
-         *     promotes that source and applies the provided defaults.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        default_account_id?: string;
-                        /**
-                         * @default exact
-                         * @enum {string}
-                         */
-                        default_strategy?: "exact" | "sum_in_window";
-                        /**
-                         * @description Absolute minor-unit tolerance budget. Accepts a decimal string (recommended) or an integer on write. Returned as a string.
-                         * @default 0
-                         */
-                        default_tolerance_minor_units?: string | number;
-                        /** @default 86400 */
-                        default_window_seconds?: number;
-                        description?: string;
-                        /**
-                         * @description Connector kind. Selects the inbound payload adapter.
-                         * @default custom
-                         */
-                        kind?: string;
-                        metadata?: Record<string, unknown>;
-                        /** @example stripe */
-                        name: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Source created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Source"];
-                    };
-                };
-                /** @description A source with this name already exists */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/sources/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch a source */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Source */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Source"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update a source's defaults */
-        patch: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Updated source */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Source"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        trace?: never;
-    };
-    "/ledger/v1/sources/{id}/inbound": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enable or rotate the source's hosted inbound endpoint
-         * @description Mints an inbound URL and signing secret. The plaintext secret is
-         *     returned once in this response and never again; calling again
-         *     rotates both token and secret, invalidating the old pair
-         *     immediately.
-         *
-         *     Push payloads to the returned `inbound_url` signed with
-         *
-         *         Kordio-Inbound-Signature: t=<unix_seconds>,v1=<hex>
-         *
-         *     where `v1 = HMAC-SHA256(secret, "<t>.<raw_body>")`. Timestamps
-         *     more than 5 minutes off are rejected. The payload is
-         *     `{"items": [...]}` (or one item object) with the same fields as
-         *     the batch ingest endpoint; ingestion is idempotent the same way.
-         *     The source's `kind` selects the payload adapter; `custom` uses
-         *     this generic scheme.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Source with `inbound_url` and one-time `inbound_secret` */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Source"];
-                    };
-                };
-            };
-        };
-        /** Disable the source's inbound endpoint */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Source with inbound disabled */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Source"];
-                    };
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/sources/{source_id}/external_transactions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ingest external transactions (idempotent batch)
-         * @description Stores up to 1000 external money-movement rows. Idempotent on
-         *     `(source, external_id)`: re-submitting a row never mutates the
-         *     stored copy and reports `replayed`. Invalid rows report `error`
-         *     per item without blocking the rest.
-         *
-         *     Amounts are integer minor units. `occurred_at` (alias `at`) is
-         *     ISO 8601. `reference_rail`/`reference_kind`/`reference_value`
-         *     must be provided together; they join against transaction
-         *     external refs during matching. `raw` retains the provider
-         *     payload.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    source_id: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        items: {
-                            account_id?: string;
-                            /**
-                             * @description External amount in minor units. Accepts a decimal string (recommended) or an integer on write. Returned as a string.
-                             * @example 10000000
-                             */
-                            amount: string | number;
-                            /** @example USDC */
-                            currency: string;
-                            /** @example txn_1OqIJq */
-                            external_id: string;
-                            /** Format: date-time */
-                            occurred_at: string;
-                            raw?: Record<string, unknown>;
-                            /** @example charge */
-                            reference_kind?: string;
-                            /** @example stripe */
-                            reference_rail?: string;
-                            /** @example ch_3Nq */
-                            reference_value?: string;
-                        }[];
-                    };
-                };
-            };
-            responses: {
-                /** @description Per-item ingest result */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["IngestResult"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/sources/{source_id}/reconciliation_runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run reconciliation for a source
-         * @description Draws open external transactions for the source (optionally
-         *     bounded by `from`/`to` on `occurred_at`) and matches them.
-         *     Strategy, window, and tolerance default from the source.
-         *
-         *     Runs with at most 500 open items execute synchronously and
-         *     return the full result. Larger runs return `status: queued`
-         *     with empty arrays; poll `GET /v1/reconciliation_runs/{id}` and
-         *     subscribe to `reconciliation.run_completed`.
-         *
-         *     One queued or running run per source; a second request returns
-         *     `run_in_progress` (409). Inline `items` are rejected here.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    source_id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        /** @description Absolute minor-unit tolerance budget. Accepts a decimal string (recommended) or an integer on write. */
-                        auto_resolve_below_minor_units?: string | number;
-                        external_reference?: string;
-                        /** Format: date-time */
-                        from?: string;
-                        note?: string;
-                        /** @enum {string} */
-                        strategy?: "exact" | "sum_in_window";
-                        /** Format: date-time */
-                        to?: string;
-                        window_seconds?: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Run executed (completed) or queued */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ReconciliationRun"];
-                    };
-                };
-                /** @description A run is already active for this source (`run_in_progress`) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/tenants/me/anonymize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Redact tenant metadata and party references
-         * @description Right-of-erasure. Wipes `metadata` on every transaction,
-         *     posting, account, event, and webhook delivery payload owned by
-         *     the tenant, and replaces party-reference keys
-         *     (`counterparty_ref`, `sender_party_id`, `recipient_party_id`)
-         *     with the literal string `REDACTED`.
-         *
-         *     Postings, balances, value dates, currencies, and amounts remain.
-         *     That is the financial substance retention law requires us to
-         *     keep. See `docs/decisions/2026-05-27-platform-open-questions.md`
-         *     (Q6) for the full rationale.
-         *
-         *     Irreversible. All-or-nothing per tenant.
-         *
-         *     Auth: requires `ledger:write` AND a bearer token issued in the
-         *     last 5 minutes. A stale token returns `401
-         *     fresh_authentication_required`.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["AnonymizationRequest"];
-                };
-            };
-            responses: {
-                /** @description Anonymization completed. */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            data?: components["schemas"]["AnonymizationResult"];
-                        };
-                    };
-                };
-                /**
-                 * @description Returned with `error.code: "fresh_authentication_required"`
-                 *     when the bearer token was issued more than 5 minutes ago.
-                 */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Returned when `confirm` is not the literal `"ANONYMIZE"`. */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/ledger/v1/transactions": {
         parameters: {
             query?: never;
@@ -3255,12 +1789,20 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    /** @description Only transactions with a posting on this account. */
+                    account?: string;
+                    /** @description Only transactions with a posting of at least this amount, in minor units. */
+                    amount_gte?: number;
+                    /** @description Only transactions with a posting of at most this amount, in minor units. */
+                    amount_lte?: number;
+                    /** @description Only transactions with a posting in this currency. */
+                    currency?: string;
                     /**
                      * @description Opaque token from a prior page's `next_cursor`. Do not decode or
                      *     construct cursors client-side; their encoding is implementation
                      *     detail and may change between releases. Cursors are stable for
                      *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
+                     *     archived resource still paginates correctly. It points at a
                      *     position, not at a row). No documented TTL; treat cursors as
                      *     valid until the next forward-incompatible API change.
                      */
@@ -3271,6 +1813,8 @@ export interface paths {
                      *     touched account.
                      */
                     expand?: components["parameters"]["Expand"];
+                    /** @description Adds `total`, the count of all matching transactions. */
+                    include_total?: boolean;
                     limit?: components["parameters"]["Limit"];
                     /**
                      * @description Filter by metadata values. Example:
@@ -3279,6 +1823,17 @@ export interface paths {
                     metadata?: {
                         [key: string]: string;
                     };
+                    ref_kind?: string;
+                    /** @description Only transactions with an external ref on this rail. */
+                    ref_rail?: string;
+                    ref_value?: string;
+                    /** @description `true` for reversed transactions only, `false` for unreversed only. Omit for both. */
+                    reversed?: boolean;
+                    status?: "pending" | "posted" | "archived";
+                    /** @description Inclusive lower bound on `value_date`. */
+                    value_date_from?: string;
+                    /** @description Exclusive upper bound on `value_date`. */
+                    value_date_to?: string;
                 };
                 header?: never;
                 path?: never;
@@ -3300,11 +1855,14 @@ export interface paths {
         put?: never;
         /**
          * Create a transaction
-         * @description Write a balanced set of postings. Replays of the same
-         *     `Idempotency-Key` return the original transaction with status 200.
+         * @description Write a balanced set of postings, at most 250. Replays of the
+         *     same `Idempotency-Key` return the original transaction with
+         *     status 200. A replay that arrives while the original is still
+         *     being applied returns `409 in_progress`; retry with the same key.
          *
-         *     Set `?dry_run=true` to validate without writing: no idempotency
-         *     key required, no events emitted, no balance changes.
+         *     Set `?dry_run=true` (or `"dry_run": true` in the body) to
+         *     validate without writing: no idempotency key required, no events
+         *     emitted, no balance changes. Dry runs answer `200`.
          */
         post: {
             parameters: {
@@ -3339,13 +1897,13 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Replayed (same `Idempotency-Key` as a prior call). */
+                /** @description Replayed (same `Idempotency-Key` as a prior call), or a dry run. */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Transaction"];
+                        "application/json": components["schemas"]["Transaction"] | components["schemas"]["DryRun"];
                     };
                 };
                 /** @description Created */
@@ -3354,11 +1912,12 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Transaction"] | components["schemas"]["DryRun"];
+                        "application/json": components["schemas"]["Transaction"];
                     };
                 };
-                /** @description missing_idempotency_key (required header absent on writes). */
-                400: {
+                403: components["responses"]["InsufficientScope"];
+                /** @description `in_progress`, `period_closed`, `precondition_failed`, `duplicate_external_ref`, or `account_closed`. */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -3366,8 +1925,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                403: components["responses"]["InsufficientScope"];
                 422: components["responses"]["Unbalanced"];
+                /** @description `unavailable`: the balance engine could not be reached. Retry with the same idempotency key. */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -3448,9 +2015,10 @@ export interface paths {
         head?: never;
         /**
          * Update transaction metadata
-         * @description Metadata is the only mutable field on a transaction. Any other
-         *     field returns `409 immutable_field`. To correct posted data,
-         *     write a reversal.
+         * @description Metadata is the only mutable field on a transaction. Sending
+         *     `postings`, `idempotency_key`, `reverses` or `reversed_by`
+         *     returns `409 immutable_field`. Values are stored as strings. To
+         *     correct posted data, write a reversal.
          */
         patch: {
             parameters: {
@@ -3514,26 +2082,24 @@ export interface paths {
         put?: never;
         /**
          * Commit pending postings
-         * @description Finalizes any `pending: true` postings on a transaction.
-         *     Idempotent on `Idempotency-Key`: replays return the original
-         *     result without re-emitting events.
+         * @description Finalizes every `pending: true` posting on a transaction and
+         *     moves it to `status: posted`. Committing a transaction that is
+         *     already posted returns it unchanged, without re-emitting events.
+         *     A reversed transaction cannot be committed: its pending postings
+         *     were voided by the reversal, and the call returns
+         *     `409 invalid_state`.
          */
         post: {
             parameters: {
-                query?: never;
-                header?: {
+                query?: {
                     /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
+                     * @description Comma-separated. `postings.account` inlines each posting's
+                     *     account object; `balances` adds the post-commit balance of every
+                     *     touched account.
                      */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                    expand?: components["parameters"]["Expand"];
                 };
+                header?: never;
                 path: {
                     id: string;
                 };
@@ -3551,6 +2117,15 @@ export interface paths {
                     };
                 };
                 404: components["responses"]["NotFound"];
+                /** @description invalid_state (the transaction was reversed) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -3677,6 +2252,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ledger/v1/transactions/{id}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List refunds of a transaction
+         * @description Every refund booked against the transaction, newest first.
+         *     Refunds are the transactions whose `metadata._refund_of` is
+         *     this id.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /**
+                     * @description Opaque token from a prior page's `next_cursor`. Do not decode or
+                     *     construct cursors client-side; their encoding is implementation
+                     *     detail and may change between releases. Cursors are stable for
+                     *     the resources they reference (a cursor pointing at a deleted /
+                     *     archived resource still paginates correctly. It points at a
+                     *     position, not at a row). No documented TTL; treat cursors as
+                     *     valid until the next forward-incompatible API change.
+                     */
+                    cursor?: components["parameters"]["Cursor"];
+                    /**
+                     * @description Comma-separated. `postings.account` inlines each posting's
+                     *     account object; `balances` adds the post-commit balance of every
+                     *     touched account.
+                     */
+                    expand?: components["parameters"]["Expand"];
+                    limit?: components["parameters"]["Limit"];
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of refund transactions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListEnvelope"] & {
+                            data?: components["schemas"]["Transaction"][];
+                        };
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ledger/v1/transactions/{id}/reverse": {
         parameters: {
             query?: never;
@@ -3688,9 +2327,19 @@ export interface paths {
         put?: never;
         /**
          * Reverse a transaction
-         * @description Creates a new transaction with each posting's direction flipped
-         *     and writes a bidirectional link via `reverses` / `reversed_by`.
-         *     Idempotent on `Idempotency-Key`.
+         * @description Creates a new transaction with each posted leg's direction
+         *     flipped and writes a bidirectional link via `reverses` /
+         *     `reversed_by`. The original moves to `status: archived`.
+         *
+         *     Pending postings on the original are not flipped. They are
+         *     voided: their hold is released, they get a `voided_at`, and they
+         *     no longer count toward any balance. A reversed transaction can
+         *     no longer be committed.
+         *
+         *     If the original's `value_date` falls in a closed period, the
+         *     reversal is dated now and carries `_reverses_value_date` in its
+         *     metadata. Idempotent on `Idempotency-Key`: a replay returns the
+         *     existing reversal with status 200.
          */
         post: {
             parameters: {
@@ -3722,6 +2371,15 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
+                /** @description Idempotency replay (the existing reversal is returned) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Transaction"];
+                    };
+                };
                 /** @description Reversal created */
                 201: {
                     headers: {
@@ -3769,11 +2427,14 @@ export interface paths {
          *     On any failure the response status is `207 Multi-Status` (or
          *     `201` if every item succeeded).
          *
-         *     **Atomic mode is partial today.** `"atomic": true` flags the
-         *     intent; failures are still surfaced per-item. Full rollback of
-         *     prior successes is not implemented yet; reverse them manually
-         *     if you need rollback semantics. We do not silently drop the
-         *     request.
+         *     Without `atomic`, items succeed or fail independently: an item
+         *     rejected for `insufficient_funds` does not affect the others.
+         *
+         *     With `"atomic": true`, the batch is all or nothing. If any item
+         *     fails, nothing is written; the failing items carry their own
+         *     error and every other item carries `invalid_request` ("atomic
+         *     batch aborted"). An atomic batch carries at most 250 postings
+         *     across all of its transactions.
          */
         post: {
             parameters: {
@@ -3787,7 +2448,8 @@ export interface paths {
                     "application/json": {
                         /** @default false */
                         atomic?: boolean;
-                        transactions: components["schemas"]["TransactionInput"][];
+                        /** @description An empty array returns `422 invalid_request` with `param` `transactions`. */
+                        transactions: components["schemas"]["BulkTransactionInput"][];
                     };
                 };
             };
@@ -3875,116 +2537,9 @@ export interface paths {
                         "application/json": components["schemas"]["Transaction"];
                     };
                 };
-                /** @description Missing required query parameters */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
                 404: components["responses"]["NotFound"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/webhook_deliveries/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch a webhook delivery */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["WebhookDelivery"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/webhook_deliveries/{id}/redeliver": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Re-enqueue a delivery
-         * @description Inserts a NEW `webhook_delivery` row referencing the same event
-         *     + endpoint. The source row is not modified. The DeliveryWorker
-         *     picks up the new row on its next tick. Replaying the same
-         *     `Idempotency-Key` returns the original new row.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description New delivery enqueued. */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["WebhookDelivery"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-                /** @description Endpoint is disabled (`webhook_endpoint_disabled`). */
-                409: {
+                /** @description Missing required query parameters (`invalid_request`) */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -3994,433 +2549,8 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/webhook_endpoints": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List webhook endpoints */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["List"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Register a webhook endpoint
-         * @description The response includes `signing_secret`, the **only** time it is
-         *     returned. Store it before discarding the response.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["WebhookEndpointInput"];
-                };
-            };
-            responses: {
-                /** @description Endpoint created. Body includes one-time `signing_secret`. */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["WebhookEndpoint"];
-                    };
-                };
-                422: components["responses"]["Error"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/webhook_endpoints/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a webhook endpoint */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["WebhookEndpoint"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
         put?: never;
         post?: never;
-        /** Remove an endpoint */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Removed */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        options?: never;
-        head?: never;
-        /** Update endpoint settings */
-        patch: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        active?: boolean;
-                        description?: string;
-                        enabled_events?: string[];
-                        url?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["WebhookEndpoint"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        trace?: never;
-    };
-    "/ledger/v1/webhook_endpoints/{id}/deliveries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List recent deliveries for an endpoint
-         * @description Returns the recent webhook deliveries for `:id`, newest-first, with
-         *     full request/response detail so an integrator can debug a failing
-         *     handler without DB access. `request_headers` is sanitized: any
-         *     header containing `authorization`, `secret`, or `cookie` is
-         *     redacted. The `Kordio-Signature` header is preserved (HMAC,
-         *     not the key) so the value can be verified.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /**
-                     * @description Opaque token from a prior page's `next_cursor`. Do not decode or
-                     *     construct cursors client-side; their encoding is implementation
-                     *     detail and may change between releases. Cursors are stable for
-                     *     the resources they reference (a cursor pointing at a deleted /
-                     *     anonymized resource still paginates correctly. It points at a
-                     *     position, not at a row). No documented TTL; treat cursors as
-                     *     valid until the next forward-incompatible API change.
-                     */
-                    cursor?: components["parameters"]["Cursor"];
-                    limit?: components["parameters"]["Limit"];
-                    /** @description Filter by delivery status. */
-                    status?: "pending" | "succeeded" | "failed";
-                };
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["List"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/webhook_endpoints/{id}/deliveries/failed_count": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Count failed deliveries for an endpoint
-         * @description Returns the count of deliveries that exhausted their retries
-         *     (`status == failed`) for this endpoint. `since` accepts either
-         *     an ISO-8601 timestamp or a relative duration (`24h`, `7d`,
-         *     `1h`). Unparseable values are ignored.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @example 24h */
-                    since?: string;
-                };
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description ok */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["EnvelopeFields"] & {
-                            data?: {
-                                count: number;
-                                /** @enum {string} */
-                                object: "delivery_count";
-                                /** Format: date-time */
-                                since?: string | null;
-                            };
-                        };
-                    };
-                };
-                404: components["responses"]["NotFound"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/webhook_endpoints/{id}/rotate_secret": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rotate the signing secret
-         * @description Mints a new signing secret and returns the plaintext **once**. The
-         *     previous secret remains valid for inbound signature verification
-         *     for 24 hours after rotation, then is destroyed (sweeper job).
-         *     Outgoing deliveries sign with the current secret only; Kordio
-         *     does not dual-sign.
-         *
-         *     Re-rotating before the prior overlap window closes is rejected
-         *     with `rotation_in_progress` (409) to prevent a 3-key chain.
-         *     Body accepts no params today; `Idempotency-Key` header supported.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Rotated. Body includes one-time `signing_secret`. */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["EnvelopeFields"] & {
-                            /** Format: uuid */
-                            id: string;
-                            /** @enum {string} */
-                            object: "webhook_endpoint";
-                            /**
-                             * Format: date-time
-                             * @description UTC timestamp 24h in the future. The previous secret
-                             *     continues to verify inbound signatures until then.
-                             */
-                            previous_secret_expires_at: string;
-                            /** @description New plaintext signing secret. Shown only on this response. */
-                            signing_secret: string;
-                        };
-                    };
-                };
-                404: components["responses"]["NotFound"];
-                409: components["responses"]["Error"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/v1/webhook_endpoints/{id}/test_send": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enqueue a synthetic test delivery
-         * @description Creates a `webhook_delivery` row for `:id` carrying a synthetic
-         *     event. The synthetic event is NOT persisted to `/v1/events`;
-         *     test sends shouldn't pollute the durable event tail subscribers
-         *     consume. The DeliveryWorker delivers it like any other.
-         *
-         *     `event_type` defaults to `"webhook.test"`. `payload` defaults to
-         *     `{"ping": true, "test": true}`. Both are optional.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Required on writes. Stable identifier you choose. The same key
-                     *     always returns the same transaction, forever. Can also be supplied as
-                     *     `idempotency_key` in the request body. Header wins.
-                     *
-                     *     Allowed character set: `A-Z`, `a-z`, `0-9`, `_`, `:`, `.`, `-`.
-                     *     Max 255 bytes. Replays of an accepted key return the original
-                     *     response with header `Idempotent-Replayed: true` so callers can
-                     *     tell a replay from a freshly-committed result.
-                     */
-                    "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-                };
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        /** @example webhook.test */
-                        event_type?: string;
-                        payload?: Record<string, unknown>;
-                    };
-                };
-            };
-            responses: {
-                /** @description Delivery enqueued. */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["WebhookDelivery"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-                /** @description Endpoint is disabled (`webhook_endpoint_disabled`). */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-            };
-        };
         delete?: never;
         options?: never;
         head?: never;
@@ -4442,8 +2572,10 @@ export interface paths {
          *     (`client_id:client_secret`) **or** with `client_id` and
          *     `client_secret` in the form body.
          *
-         *     Tokens are HS256 JWTs valid for one hour. They carry `tenant_id`,
-         *     `mode`, and the granted `scope`. Decode them at jwt.io to inspect.
+         *     Tokens are HS256 JWTs valid for one hour. They carry
+         *     `workspace_id`, `mode`, the granted `scope`, and `ledger_id`
+         *     when the client is pinned to a ledger. Decode them at jwt.io to
+         *     inspect.
          */
         post: {
             parameters: {
@@ -4517,17 +2649,17 @@ export interface components {
     schemas: {
         Account: components["schemas"]["EnvelopeFields"] & {
             /**
-             * @description `restricted` is set by the platform on accounts created via
-             *     `POST /v1/reserves`. Customers can also pass it explicitly
-             *     to model reserves they build by hand.
+             * @description `restricted` marks accounts held against a counterparty.
+             *     Accounts created through this API are `standard`.
              * @default standard
              * @enum {string}
              */
             account_kind?: "standard" | "restricted";
+            /** Format: date-time */
+            closed_at?: string | null;
+            closed_by_label?: string | null;
             /**
-             * @description Opaque, customer-defined identifier of the counterparty a
-             *     reserve account is held against. Set automatically by
-             *     `POST /v1/reserves`; ignored on non-reserve accounts.
+             * @description Opaque identifier of the counterparty a `restricted` account is held against.
              * @example acme
              */
             counterparty_ref?: string | null;
@@ -4562,16 +2694,19 @@ export interface components {
              */
             custody_provider?: string | null;
             /**
-             * @description Customer-set grouping for funds segregation reporting.
-             *     The platform does not interpret this beyond grouping
-             *     accounts in `GET /v1/reports/fund_segregation`. Inherited
-             *     from the account's template when omitted on create.
+             * @description Customer-set grouping. The platform stores it and filters
+             *     on it; it does not interpret it. Inherited from the
+             *     account's template when omitted on create.
              * @default neutral
              * @enum {string}
              */
             fund_classification?: "client_held" | "operator" | "neutral";
             /** @example accounts_receivable:acme */
             id: string;
+            ledgerable_id?: string | null;
+            ledgerable_type?: string | null;
+            /** @description Increments on every change. Use it in transaction `conditions` for optimistic concurrency. */
+            lock_version?: number;
             metadata?: {
                 [key: string]: unknown;
             };
@@ -4589,6 +2724,11 @@ export interface components {
              * @enum {string}
              */
             overdraft_policy?: "allowed" | "none";
+            parent_id?: string | null;
+            /** @enum {string} */
+            status?: "open" | "closed";
+            /** @description Template the account was created from. */
+            template?: string | null;
             /**
              * @example liability
              * @enum {string}
@@ -4640,6 +2780,16 @@ export interface components {
              */
             id: string;
             /**
+             * @description Id of the object in your system. Paired with `ledgerable_type`.
+             * @example acme
+             */
+            ledgerable_id?: string;
+            /**
+             * @description Type of the object in your system this account belongs to. Paired with `ledgerable_id`.
+             * @example merchant
+             */
+            ledgerable_type?: string;
+            /**
              * @example {
              *       "counterparty": "acme",
              *       "tier": "standard"
@@ -4658,13 +2808,26 @@ export interface components {
              */
             overdraft_limit?: string;
             /**
-             * @description `allowed` lets the account go to any balance; `none` rejects
-             *     postings that would drive available below `-overdraft_limit`.
-             *     Default `allowed` for backward compatibility.
+             * @description `allowed` lets the account go to any balance. `none` rejects
+             *     any posting that would take `available` (posted minus pending
+             *     outflows; pending inflows never count) below
+             *     `-overdraft_limit`. A rejected write returns
+             *     `insufficient_funds`.
              * @default allowed
              * @enum {string}
              */
             overdraft_policy?: "allowed" | "none";
+            /**
+             * @description Id of a parent account. Used by `GET /v1/accounts/:id/category_balance`.
+             * @example accounts_receivable
+             */
+            parent_id?: string;
+            /**
+             * @description Name of an account template. The template's type, allowed
+             *     currencies and defaults are applied before insert.
+             * @example accounts_receivable
+             */
+            template?: string;
             /**
              * @example liability
              * @enum {string}
@@ -4711,34 +2874,34 @@ export interface components {
             /** @enum {string} */
             object: "account_template";
         };
-        AnonymizationRequest: {
-            /**
-             * @description Must equal the literal string `ANONYMIZE`.
-             * @enum {string}
-             */
-            confirm: "ANONYMIZE";
-            /**
-             * @description Free-form label, e.g. `gdpr_erasure`, `customer_request`.
-             * @example gdpr_erasure
-             */
-            reason?: string;
-        };
-        AnonymizationResult: {
-            /** Format: uuid */
-            anonymization_id: string;
-            /** Format: date-time */
-            anonymized_at?: string;
+        AccountUpdate: {
+            custody_external_id?: string | null;
+            /** @description Set together with `custody_external_id`, or clear both. */
+            custody_provider?: string | null;
             /** @enum {string} */
-            object: "anonymization_result";
-            reason?: string | null;
-            /** @enum {string} */
-            status: "completed";
+            fund_classification?: "client_held" | "operator" | "neutral";
+            ledgerable_id?: string | null;
+            ledgerable_type?: string | null;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            name?: string;
+            parent_id?: string | null;
         };
         Balance: components["schemas"]["EnvelopeFields"] & {
             /** @example accounts_receivable:acme */
             account: string;
             /**
-             * @description posted + pending, as a decimal string. Parse with a big-integer or decimal type, never a JS number.
+             * Format: date-time
+             * @description Present only on point-in-time reads (`?at=`).
+             */
+            as_of?: string;
+            /**
+             * @description `posted` minus every open pending outflow. Pending inflows
+             *     never count until committed. This is the same figure the
+             *     `overdraft_policy: none` write check uses. Decimal string;
+             *     parse with a big-integer or decimal type, never a JS
+             *     number.
              * @example 9700000
              */
             available: string;
@@ -4777,6 +2940,19 @@ export interface components {
             /** @enum {string} */
             object: "balance_sheet";
         };
+        BulkTransactionInput: {
+            /**
+             * @description Required on every item. Charset `[A-Za-z0-9_:.-]`, max 255 bytes.
+             * @example cap_a
+             */
+            idempotency_key: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            postings: components["schemas"]["PostingInput"][];
+            /** Format: date-time */
+            value_date?: string;
+        };
         CashFlowReport: {
             accounts: {
                 account: string;
@@ -4793,11 +2969,39 @@ export interface components {
                     uncategorized: string;
                 };
             };
+            /**
+             * @description Present when the request passed `granularity`.
+             * @enum {string}
+             */
+            granularity?: "day" | "week" | "month";
             /** Format: uuid */
             ledger_id: string;
             /** @enum {string} */
             object: "cash_flow";
             period: components["schemas"]["ReportPeriod"];
+            /** @description Present when the request passed `granularity`. One bucket per period, each with the same `by_currency` shape. */
+            series?: components["schemas"]["ReportBucket"][];
+        };
+        CategoryBalance: {
+            available: string;
+            /** @example USDC */
+            currency: string;
+            /** @example 3 */
+            member_count: number;
+            /**
+             * @example [
+             *       "accounts_receivable",
+             *       "accounts_receivable:acme",
+             *       "accounts_receivable:globex"
+             *     ]
+             */
+            members: string[];
+            /** @enum {string} */
+            object: "category_balance";
+            pending: string;
+            posted: string;
+            /** @example accounts_receivable */
+            root: string;
         };
         DryRun: components["schemas"]["EnvelopeFields"] & {
             /** @enum {string} */
@@ -4853,7 +3057,7 @@ export interface components {
                  * @description Machine-readable. Stable across versions.
                  * @enum {string}
                  */
-                code: "invalid_request" | "missing_idempotency_key" | "unauthorized" | "forbidden" | "insufficient_scope" | "invalid_client" | "invalid_grant" | "invalid_scope" | "not_found" | "unbalanced" | "currency_mismatch" | "unknown_account" | "already_exists" | "already_reversed" | "immutable_field" | "insufficient_funds" | "period_closed" | "precondition_failed" | "duplicate_external_ref" | "partial_refund_exceeds_original" | "refund_currency_required" | "rotation_in_progress" | "webhook_endpoint_disabled" | "reserve_insufficient_funds" | "reserve_currency_mismatch" | "reserve_release_exceeds_balance" | "account_template_unknown" | "invalid_state" | "unsupported_grant_type" | "rate_limited" | "internal_error" | "tenant_suspended" | "fresh_authentication_required";
+                code: "invalid_request" | "missing_idempotency_key" | "unauthorized" | "forbidden" | "insufficient_scope" | "invalid_client" | "invalid_grant" | "invalid_scope" | "not_found" | "unbalanced" | "currency_mismatch" | "unknown_account" | "already_exists" | "already_reversed" | "immutable_field" | "insufficient_funds" | "period_closed" | "period_close_imbalanced" | "account_balance_nonzero" | "account_closed" | "precondition_failed" | "duplicate_external_ref" | "partial_refund_exceeds_original" | "refund_currency_required" | "rotation_in_progress" | "account_template_unknown" | "plan_required" | "invalid_state" | "in_progress" | "unsupported_grant_type" | "rate_limited" | "internal_error" | "unavailable";
                 /** @description Code-specific structured detail (e.g. `by_currency` for unbalanced). */
                 details?: {
                     [key: string]: unknown;
@@ -4877,145 +3081,63 @@ export interface components {
         Event: components["schemas"]["EnvelopeFields"] & {
             /** Format: date-time */
             created_at: string;
-            /** Format: uuid */
-            id: string;
-            /** @enum {string} */
-            object: "event";
-            payload?: {
+            /** @description Event payload. Shape depends on `type`. */
+            data?: {
                 [key: string]: unknown;
             };
+            /** Format: uuid */
+            id: string;
+            /** @description True when the event belongs to a live ledger. */
+            livemode?: boolean;
+            /** @enum {string} */
+            object: "event";
             resource_id?: string | null;
             /**
-             * @description One of: `account.created`, `account.classification_changed`,
-             *     `transaction.created`,
+             * @description One of: `account.created`, `account.closed`,
+             *     `account.classification_changed`, `transaction.created`,
              *     `transaction.reversal_created`, `transaction.reversed`,
              *     `transaction.refund_created`, `transaction.updated`,
-             *     `transaction.committed`, `oauth_client.created`,
-             *     `oauth_client.deleted`, `oauth_client.secret_rotated`,
-             *     `oauth_client.rotated`, `oauth_client.revoked`,
-             *     `member.invited`, `member.accepted`, `member.role_changed`,
-             *     `member.revoked`, `tenant.provisioned`,
-             *     `tenant.suspended`, `tenant.unsuspended`,
-             *     `webhook_endpoint.secret_rotated`,
-             *     `reconciliation.break_auto_resolved`.
+             *     `transaction.committed`, `period.closed`,
+             *     `period.closed_forced`, `period.reopened`,
+             *     `oauth_client.created`,
+             *     `oauth_client.secret_rotated`, `oauth_client.deleted`.
              *
              *     Note: `transaction.reversal_created` fires *before*
              *     `transaction.reversed` so subscribers rebuilding state
              *     from the event tail can apply the create before the
              *     link. `transaction.refund_created` fires when a refund
-             *     transaction is created; payload includes `refunds`
+             *     transaction is created; `data` includes `refunds`
              *     (original id) and `refund_amount`.
              * @example transaction.created
              */
             type: string;
         };
-        Export: {
+        ExternalRef: {
             /** Format: date-time */
             created_at?: string;
-            /**
-             * @description Signed URLs valid until `expires_at`. Empty until the
-             *     worker has uploaded the files.
-             */
-            download_urls?: string[];
-            error_message?: string | null;
-            /** Format: date-time */
-            expires_at?: string | null;
-            /** @enum {string} */
-            format: "ndjson";
-            /** Format: uuid */
             id: string;
-            /** @enum {string} */
-            object: "export";
-            /**
-             * @example [
-             *       "accounts",
-             *       "transactions",
-             *       "postings",
-             *       "events"
-             *     ]
-             */
-            resources: string[];
-            /** @enum {string} */
-            status: "pending" | "running" | "ready" | "failed";
-            /** Format: date-time */
-            updated_at?: string;
-        };
-        ExternalTransaction: {
-            account_id?: string | null;
-            amount: string;
-            /** Format: date-time */
-            created_at: string;
-            currency: string;
-            /** @description The identifier the source gave this movement. Unique per source. */
-            external_id: string;
-            /** Format: uuid */
-            id: string;
-            ignored_reason?: string | null;
-            /** Format: date-time */
-            matched_at?: string | null;
-            /** @enum {string} */
-            object: "external_transaction";
-            /** Format: date-time */
-            occurred_at?: string | null;
-            raw?: {
+            metadata?: {
                 [key: string]: unknown;
             };
-            /** Format: uuid */
-            reconciliation_match_id?: string | null;
-            /** Format: uuid */
-            reconciliation_run_id?: string | null;
-            reference_kind?: string | null;
-            reference_rail?: string | null;
-            reference_value?: string | null;
-            /** Format: uuid */
-            source_id: string;
             /** @enum {string} */
-            status: "open" | "matched" | "ignored";
+            object: "external_ref";
+            /** @example ethereum */
+            rail: string;
+            /** @example tx_hash */
+            ref_kind: string;
+            /** @example 0xabc123 */
+            value: string;
         };
-        FundSegregationReport: components["schemas"]["EnvelopeFields"] & {
-            by_currency: {
-                /**
-                 * @description Net posted balance across every `fund_classification = "client_held"`
-                 *     account in this currency, in minor units, as a decimal string.
-                 *     Parse with a big-integer or decimal type, never a JS number.
-                 * @example 1000000
-                 */
-                client_held_total: string;
-                /** @example USDC */
-                currency: string;
-                custody_breakdown: {
-                    /**
-                     * @description Minor units as a decimal string. Parse with a big-integer or decimal type, never a JS number.
-                     * @example 1000000
-                     */
-                    balance: string;
-                    /** @example vault_main */
-                    custody_external_id: string;
-                    /** @example fireblocks */
-                    custody_provider: string;
-                }[];
-                /**
-                 * @description Net posted balance across every `fund_classification = "operator"`
-                 *     account that has a `custody_provider` set, in minor units, as a
-                 *     decimal string. Parse with a big-integer or decimal type, never a JS number.
-                 * @example 1000000
-                 */
-                custody_held_total: string;
-                /**
-                 * @description `custody_held_total - client_held_total`, in minor units, as a
-                 *     decimal string. Positive = surplus, negative = shortfall.
-                 *     Customer interprets the sign per their regulatory regime.
-                 *     Parse with a big-integer or decimal type, never a JS number.
-                 * @example 0
-                 */
-                delta: string;
-            }[];
-            /** @enum {string} */
-            object: "report";
-            /** @enum {string} */
-            report: "fund_segregation";
-            /** Format: date-time */
-            value_date: string;
+        ExternalRefInput: {
+            /** @example tx_hash */
+            kind: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @example ethereum */
+            rail: string;
+            /** @example 0xabc123 */
+            value: string;
         };
         IncomeStatementReport: {
             accounts: components["schemas"]["ReportAccountRow"][];
@@ -5026,32 +3148,18 @@ export interface components {
                     revenue: string;
                 };
             };
+            /**
+             * @description Present when the request passed `granularity`.
+             * @enum {string}
+             */
+            granularity?: "day" | "week" | "month";
             /** Format: uuid */
             ledger_id: string;
             /** @enum {string} */
             object: "income_statement";
             period: components["schemas"]["ReportPeriod"];
-        };
-        IngestResult: {
-            created_count: number;
-            error_count: number;
-            /** @enum {string} */
-            object: "ingest_result";
-            replayed_count: number;
-            results: {
-                error?: {
-                    code?: string;
-                    hint?: string;
-                    message?: string;
-                    param?: string;
-                };
-                external_id: string;
-                external_transaction?: components["schemas"]["ExternalTransaction"];
-                /** @enum {string} */
-                status: "created" | "replayed" | "error";
-            }[];
-            /** Format: uuid */
-            source_id: string;
+            /** @description Present when the request passed `granularity`. One bucket per period, each with the same `by_currency` shape. */
+            series?: components["schemas"]["ReportBucket"][];
         };
         Ledger: {
             /** Format: date-time */
@@ -5139,6 +3247,7 @@ export interface components {
             /** @enum {string} */
             error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "invalid_scope";
             error_description?: string;
+            /** @example https://docs.kordio.io/ledger/authentication#invalid_client */
             error_uri?: string;
             hint?: string;
         };
@@ -5156,7 +3265,6 @@ export interface components {
             plan: string;
             /** Format: date-time */
             updated_at: string;
-            viewer_role?: string | null;
         };
         PeriodClose: {
             /**
@@ -5166,6 +3274,11 @@ export interface components {
             closed_by_label: string;
             /** Format: date-time */
             created_at: string;
+            /** @description True when the period was closed with `force=true` despite an imbalanced trial balance. */
+            forced?: boolean;
+            /** Format: date-time */
+            forced_at?: string | null;
+            forced_by_label?: string | null;
             /** Format: uuid */
             id: string;
             note?: string | null;
@@ -5178,8 +3291,16 @@ export interface components {
             /** Format: date-time */
             reopened_at?: string | null;
             reopened_by_label?: string | null;
-            /** @description The trial balance as it stood at the moment of closing. */
-            trial_balance?: components["schemas"]["TrialBalanceReport"];
+            /**
+             * @description The trial balance as it stood at the moment of closing:
+             *     `as_of`, `ledger_id`, `healthy`, `accounts` and
+             *     `totals_by_currency`, shaped as in the trial balance report.
+             *     Returned on create and on `GET /v1/period_closes/:id`, not in
+             *     lists or on reopen.
+             */
+            trial_balance?: {
+                [key: string]: unknown;
+            };
         };
         Posting: {
             /** @description A string id by default; an Account object when `?expand=postings.account`. */
@@ -5210,6 +3331,11 @@ export interface components {
              * @default false
              */
             pending?: boolean;
+            /** Format: date-time */
+            reconciled_at?: string | null;
+            reconciliation_reference?: string | null;
+            /** @description Present only on account statement entries. Posted balance after this entry. */
+            running_balance?: string;
             /**
              * @example {
              *       "region": "EU",
@@ -5222,6 +3348,11 @@ export interface components {
             transaction?: string | components["schemas"]["Transaction"];
             /** Format: date-time */
             value_date?: string;
+            /**
+             * Format: date-time
+             * @description Set when a pending posting was voided by reversing its transaction. A voided posting no longer counts toward any balance.
+             */
+            voided_at?: string | null;
         };
         PostingInput: {
             /**
@@ -5258,41 +3389,6 @@ export interface components {
                 [key: string]: string;
             };
         };
-        ReconciliationMatch: {
-            account: string;
-            amount: string;
-            currency: string;
-            /** Format: date-time */
-            external_at?: string;
-            external_id: string;
-            /** Format: int64 */
-            posting_id: number;
-            /** Format: date-time */
-            posting_value_date?: string;
-        };
-        ReconciliationRun: {
-            /** Format: date-time */
-            created_at: string;
-            external_reference?: string | null;
-            /** Format: uuid */
-            id: string;
-            matched?: components["schemas"]["ReconciliationMatch"][];
-            matched_count: number;
-            /** @enum {string} */
-            object: "reconciliation_run";
-            source: string;
-            /** Format: uuid */
-            source_id: string;
-            /** @enum {string} */
-            status: "running" | "ready" | "completed";
-            unmatched_count: number;
-            unmatched_external?: {
-                [key: string]: unknown;
-            }[];
-            unmatched_internal?: {
-                [key: string]: unknown;
-            }[];
-        };
         ReportAccountRow: {
             account: string;
             credit_total?: string;
@@ -5304,161 +3400,22 @@ export interface components {
             /** @enum {string} */
             type: "asset" | "liability" | "revenue" | "expense" | "equity";
         };
+        ReportBucket: {
+            by_currency: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
+            /** Format: date-time */
+            period_end: string;
+            /** Format: date-time */
+            period_start: string;
+        };
         ReportPeriod: {
             /** Format: date-time */
             from: string | null;
             /** Format: date-time */
             to: string;
-        };
-        ReserveClawInput: {
-            /** @description Amount in minor units to claw back, as a decimal string (recommended) or an integer on write. */
-            amount: string | number;
-            idempotency_key?: string;
-            metadata?: {
-                [key: string]: unknown;
-            };
-            /** @description Operator account where clawed funds land (revenue, write-off, etc.). */
-            operator_account_id: string;
-            /**
-             * @description Free-text audit reason; persisted in transaction metadata.
-             * @example chargeback_lost
-             */
-            reason_code: string;
-        };
-        ReserveOpResult: components["schemas"]["EnvelopeFields"] & {
-            /**
-             * @description Reserve posted balance after this op, in minor units, as a decimal string. Parse with a big-integer or decimal type, never a JS number.
-             * @example 500000
-             */
-            balance: string;
-            /** @enum {string} */
-            object: "reserve_op_result";
-            /**
-             * @description Alias of `balance`; preserved for symmetry with the decision-doc contract. Decimal string of minor units.
-             * @example 500000
-             */
-            remaining_balance?: string;
-            /** @example reserve:merchant_payable:acme:usdc */
-            reserve_account_id: string;
-            /** Format: uuid */
-            transaction_id: string;
-        };
-        ReserveReleaseInput: {
-            /** @description Amount in minor units to release, as a decimal string (recommended) or an integer on write. Must be <= the reserve's posted balance. */
-            amount: string | number;
-            idempotency_key?: string;
-            metadata?: {
-                [key: string]: unknown;
-            };
-            /** @description Account that receives the released funds. Often the original source. */
-            target_account_id: string;
-        };
-        ReservesOutstandingReport: components["schemas"]["EnvelopeFields"] & {
-            entries: {
-                /** @example acme */
-                counterparty_ref: string;
-                /** @example USDC */
-                currency: string;
-                /**
-                 * @description Minor units as a decimal string. Parse with a big-integer or decimal type, never a JS number.
-                 * @example 500000
-                 */
-                posted: string;
-            }[];
-            /** Format: uuid */
-            ledger_id: string;
-            /** @enum {string} */
-            object: "reserves_outstanding";
-            /** @example 2 */
-            reserve_account_count?: number;
-            /**
-             * @example {
-             *       "USDC": "500000"
-             *     }
-             */
-            totals_by_currency: {
-                [key: string]: string;
-            };
-        };
-        ReserveSweepInput: {
-            /**
-             * @description Amount in minor units to sweep into the reserve. Accepts a decimal string (recommended) or an integer on write.
-             * @example 500000
-             */
-            amount: string | number;
-            /**
-             * @description Opaque customer-defined identifier of the counterparty the reserve is held for.
-             * @example acme
-             */
-            counterparty_ref: string;
-            /**
-             * @description Currency of the sweep. Must equal the source account's currency.
-             * @example USDC
-             */
-            currency: string;
-            /**
-             * Format: date-time
-             * @description Informational only. Persisted in transaction metadata so a
-             *     customer-side scheduler can find expired reserves and POST
-             *     `/release`; the platform does NOT auto-release.
-             */
-            expires_at?: string | null;
-            /** @description Optional body alternative to the `Idempotency-Key` header. Header wins. */
-            idempotency_key?: string;
-            metadata?: {
-                [key: string]: unknown;
-            };
-            /**
-             * @description Account whose balance is debited to fund the reserve.
-             * @example payable:acme
-             */
-            source_account_id: string;
-            /**
-             * @description Name of a registered `account_template` whose
-             *     `accounting_type` matches the reserve's intended sign
-             *     (typically `liability` with `balance_non_negative: true`).
-             * @example merchant_payable
-             */
-            template: string;
-        };
-        Source: {
-            connected_ref?: string | null;
-            /** Format: date-time */
-            created_at: string;
-            default_account_id?: string | null;
-            /** @enum {string|null} */
-            default_strategy?: "exact" | "sum_in_window" | null;
-            default_tolerance_minor_units?: string | null;
-            default_window_seconds?: number | null;
-            description?: string | null;
-            /** Format: uuid */
-            id: string;
-            /** @description True for sources the platform created on your behalf. */
-            implicit?: boolean;
-            inbound_enabled?: boolean;
-            /** @description Returned only when inbound is enabled or the secret is rotated. Never returned again. */
-            inbound_secret?: string;
-            /** @description Present once inbound is enabled. Post signed payloads here. */
-            inbound_url?: string | null;
-            /**
-             * @description Connector kind. Selects the inbound payload adapter.
-             * @default custom
-             */
-            kind: string;
-            /** Format: date-time */
-            last_synced_at?: string | null;
-            metadata?: {
-                [key: string]: unknown;
-            };
-            /** @example cobo */
-            name: string;
-            /** @enum {string} */
-            object: "source";
-            sync_enabled?: boolean;
-            sync_error?: string | null;
-            sync_status?: string;
-            /** Format: date-time */
-            updated_at: string;
         };
         StatementBalance: {
             currency: string;
@@ -5485,6 +3442,7 @@ export interface components {
              * @example 1.0823
              */
             exchange_rate?: string | null;
+            external_refs?: components["schemas"]["ExternalRef"][];
             /**
              * Format: uuid
              * @example 3061ec4e-c959-49ba-a0f6-99186a7bd5d8
@@ -5509,13 +3467,6 @@ export interface components {
              * @example USDC
              */
             quote_currency?: string | null;
-            /** @description Minor units refunded, as a decimal string. Parse with a big-integer or decimal type, never a JS number. Present only on refund transactions. */
-            refund_amount?: string | null;
-            /**
-             * Format: uuid
-             * @description Set when this transaction refunds another (partial or full).
-             */
-            refunds?: string | null;
             /**
              * Format: uuid
              * @description Set when this transaction has been reversed.
@@ -5526,12 +3477,43 @@ export interface components {
              * @description Set when this transaction reverses another.
              */
             reverses?: string | null;
+            /**
+             * @description `pending` while any posting is pending, `posted` once
+             *     committed or written without pending postings, `archived`
+             *     once reversed.
+             * @enum {string}
+             */
+            status?: "pending" | "posted" | "archived";
             /** Format: date-time */
             updated_at?: string;
             /** Format: date-time */
             value_date?: string;
         };
+        /** @description Needs `account` plus at least one of the other fields. */
+        TransactionCondition: {
+            /** @example cash:usd */
+            account: string;
+            /** @description The account's current `lock_version`. Fails if the account changed since you read it. */
+            lock_version?: number;
+            /** @description Fails if the account's available balance is above this, in minor units. */
+            max_available_balance?: string | number;
+            /** @description Fails if the account's available balance is below this, in minor units. */
+            min_available_balance?: string | number;
+        };
         TransactionInput: {
+            /**
+             * @description Preconditions checked atomically with the write. A failed
+             *     condition returns `precondition_failed` and writes nothing.
+             */
+            conditions?: components["schemas"]["TransactionCondition"][];
+            /**
+             * @description Identifiers of this transaction in external systems. Each
+             *     `(rail, kind, value)` can be attached to one transaction per
+             *     ledger; a second attempt returns `duplicate_external_ref`.
+             *     Find a transaction by reference with
+             *     `GET /v1/transactions/lookup`.
+             */
+            external_refs?: components["schemas"]["ExternalRefInput"][];
             /**
              * @description Alternative to the `Idempotency-Key` header. Required if header
              *     absent. Charset `[A-Za-z0-9_:.-]`, max 255 bytes.
@@ -5576,101 +3558,6 @@ export interface components {
                     residual: string;
                 };
             };
-        };
-        WebhookDelivery: components["schemas"]["EnvelopeFields"] & {
-            /** @description How many HTTP attempts this row has made (0 for pending). */
-            attempt: number;
-            /** Format: date-time */
-            created_at?: string;
-            /**
-             * @description How this delivery was created.
-             * @enum {string}
-             */
-            enqueue_kind?: "event" | "redelivery" | "test_send";
-            error_message?: string | null;
-            event_id: string;
-            /** Format: uuid */
-            id: string;
-            /** Format: date-time */
-            next_attempt_at?: string | null;
-            /** @enum {string} */
-            object: "webhook_delivery";
-            /**
-             * Format: uuid
-             * @description For `enqueue_kind: redelivery`, the source delivery id.
-             */
-            redelivers_delivery_id?: string | null;
-            request_body?: string | null;
-            /**
-             * @description Outgoing request headers as sent to the integrator's
-             *     endpoint. Sensitive headers (`authorization`, `*secret*`,
-             *     `cookie`) are redacted to `[redacted]`. The
-             *     `Kordio-Signature` header is preserved because it's an
-             *     HMAC value, not a key.
-             */
-            request_headers?: {
-                [key: string]: string;
-            } | null;
-            /** @example POST */
-            request_method?: string | null;
-            request_url?: string | null;
-            /** Format: date-time */
-            response_at?: string | null;
-            response_body?: string | null;
-            response_headers?: {
-                [key: string]: string;
-            } | null;
-            response_status?: number | null;
-            /**
-             * @description Public delivery state. Internally the DB also carries a
-             *     `dead` value for terminal failures after all retries
-             *     exhausted; the API collapses that to `failed`.
-             * @enum {string}
-             */
-            status: "pending" | "succeeded" | "failed";
-            /** Format: date-time */
-            updated_at?: string;
-            /** Format: uuid */
-            webhook_endpoint_id: string;
-        };
-        WebhookEndpoint: components["schemas"]["EnvelopeFields"] & {
-            active: boolean;
-            /** Format: date-time */
-            created_at?: string;
-            description?: string;
-            enabled_events?: string[];
-            /** Format: uuid */
-            id: string;
-            /** Format: date-time */
-            last_delivered_at?: string | null;
-            /** @enum {string} */
-            mode?: "live" | "test";
-            /** @enum {string} */
-            object: "webhook_endpoint";
-            /** @description Returned only on create + rotate. */
-            signing_secret?: string;
-            /** @description Hint to the integrator that the secret is shown once. */
-            signing_secret_note?: string;
-            /** Format: uri */
-            url: string;
-        };
-        WebhookEndpointInput: {
-            /** @example Production handler */
-            description?: string;
-            /**
-             * @example [
-             *       "transaction.created",
-             *       "transaction.reversal_created",
-             *       "transaction.refund_created",
-             *       "transaction.reversed"
-             *     ]
-             */
-            enabled_events?: string[];
-            /**
-             * Format: uri
-             * @example https://acme.example.com/webhooks/kordio
-             */
-            url: string;
         };
     };
     responses: {
@@ -5728,7 +3615,7 @@ export interface components {
          *     construct cursors client-side; their encoding is implementation
          *     detail and may change between releases. Cursors are stable for
          *     the resources they reference (a cursor pointing at a deleted /
-         *     anonymized resource still paginates correctly. It points at a
+         *     archived resource still paginates correctly. It points at a
          *     position, not at a row). No documented TTL; treat cursors as
          *     valid until the next forward-incompatible API change.
          */
@@ -5739,6 +3626,11 @@ export interface components {
          *     touched account.
          */
         Expand: ("postings.account" | "balances")[];
+        /**
+         * @description Adds a `series` of per-period buckets. Requires both `from` and
+         *     `to`. At most 400 buckets.
+         */
+        Granularity: "day" | "week" | "month";
         /**
          * @description Required on writes. Stable identifier you choose. The same key
          *     always returns the same transaction, forever. Can also be supplied as
@@ -5760,6 +3652,16 @@ export interface components {
          */
         LedgerId: string;
         Limit: number;
+        /**
+         * @description Inclusive lower bound on `value_date`. Omit to start at the beginning of the ledger.
+         * @example 2026-04-01T00:00:00Z
+         */
+        ReportFrom: string;
+        /**
+         * @description Exclusive upper bound on `value_date`. Defaults to now.
+         * @example 2026-05-01T00:00:00Z
+         */
+        ReportTo: string;
     };
     requestBodies: never;
     headers: never;

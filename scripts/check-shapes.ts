@@ -189,13 +189,15 @@ if (clientId && clientSecret) {
     ['/ledger/v1/transactions', `${LEDGER}/ledger/v1/transactions?limit=1`],
     ['/ledger/v1/events', `${LEDGER}/ledger/v1/events?limit=1`],
     ['/ledger/v1/ledgers', `${LEDGER}/ledger/v1/ledgers?limit=1`],
-    ['/ledger/v1/sources', `${LEDGER}/ledger/v1/sources`],
+    ['/ledger/v1/postings', `${LEDGER}/ledger/v1/postings?limit=1`],
+    ['/ledger/v1/period_closes', `${LEDGER}/ledger/v1/period_closes`],
+    ['/ledger/v1/account_templates', `${LEDGER}/ledger/v1/account_templates?limit=1`],
+    ['/ledger/v1/_meta/capabilities', `${LEDGER}/ledger/v1/_meta/capabilities`],
     ['/ledger/v1/organizations/me', `${LEDGER}/ledger/v1/organizations/me`],
     ['/ledger/v1/reports/trial_balance', `${LEDGER}/ledger/v1/reports/trial_balance`],
     ['/ledger/v1/reports/balance_sheet', `${LEDGER}/ledger/v1/reports/balance_sheet`],
     ['/ledger/v1/reports/income_statement', `${LEDGER}/ledger/v1/reports/income_statement`],
     ['/ledger/v1/reports/cash_flow', `${LEDGER}/ledger/v1/reports/cash_flow`],
-    ['/ledger/v1/external_transactions', `${LEDGER}/ledger/v1/external_transactions?limit=1`],
   ] as const) {
     await check('ledger', 'GET', p, url, { headers: h })
   }

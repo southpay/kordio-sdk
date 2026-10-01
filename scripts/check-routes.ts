@@ -5,13 +5,11 @@ const BASE = process.env.KORDIO_BASE_URL ?? 'https://api.kordio.io'
 const PLACEHOLDER = 'route-probe'
 
 const PUBLIC_BY_DESIGN: Record<string, string> = {
-  'GET /healthz': 'liveness, answers 200',
   'GET /.well-known/jwks.json': 'verifiers fetch it without a credential',
   'GET /.well-known/oauth-authorization-server': 'discovery document',
   'POST /oauth/token': 'rejects the credential, not the route',
   'POST /control/v1/cosign/verify': 'verification needs no credential',
   'POST /control/v1/cosign/consume': 'verification needs no credential',
-  'POST /ledger/v1/inbound/sources/{token}': 'unknown token is a real 404, not a missing route',
 }
 
 const ROUTE_EXISTS = new Set([200, 201, 202, 400, 401, 403, 405, 409, 415, 422, 429])

@@ -4,7 +4,6 @@ import { OAuthAuthProvider, StaticTokenAuthProvider } from './auth'
 import { AccountsResource } from './resources/accounts'
 import {
   AccountTemplatesResource,
-  ExportsResource,
   LedgersResource,
   OAuthClientsResource,
   OrganizationsResource,
@@ -13,15 +12,8 @@ import {
 import { BalancesResource } from './resources/balances'
 import { EventsResource } from './resources/events'
 import { PostingsResource } from './resources/postings'
-import {
-  ExternalTransactionsResource,
-  ReconciliationRunsResource,
-  SourcesResource,
-} from './resources/reconciliation'
 import { ReportsResource } from './resources/reports'
-import { ReservesResource } from './resources/reserves'
 import { TransactionsResource } from './resources/transactions'
-import { WebhookDeliveriesResource, WebhookEndpointsResource } from './resources/webhooks'
 import type { Capabilities } from './types'
 
 export const DEFAULT_BASE_URL = 'https://api.kordio.io'
@@ -82,17 +74,10 @@ export class KordioLedger {
   readonly balances: BalancesResource
   readonly transactions: TransactionsResource
   readonly postings: PostingsResource
-  readonly reserves: ReservesResource
   readonly events: EventsResource
   readonly reports: ReportsResource
-  readonly sources: SourcesResource
-  readonly reconciliationRuns: ReconciliationRunsResource
-  readonly externalTransactions: ExternalTransactionsResource
   readonly periodCloses: PeriodClosesResource
   readonly accountTemplates: AccountTemplatesResource
-  readonly exports: ExportsResource
-  readonly webhookEndpoints: WebhookEndpointsResource
-  readonly webhookDeliveries: WebhookDeliveriesResource
   readonly oauthClients: OAuthClientsResource
   readonly ledgers: LedgersResource
   readonly organizations: OrganizationsResource
@@ -123,17 +108,10 @@ export class KordioLedger {
     this.balances = new BalancesResource(this.transport)
     this.transactions = new TransactionsResource(this.transport)
     this.postings = new PostingsResource(this.transport)
-    this.reserves = new ReservesResource(this.transport)
     this.events = new EventsResource(this.transport)
     this.reports = new ReportsResource(this.transport)
-    this.sources = new SourcesResource(this.transport)
-    this.reconciliationRuns = new ReconciliationRunsResource(this.transport)
-    this.externalTransactions = new ExternalTransactionsResource(this.transport)
     this.periodCloses = new PeriodClosesResource(this.transport)
     this.accountTemplates = new AccountTemplatesResource(this.transport)
-    this.exports = new ExportsResource(this.transport)
-    this.webhookEndpoints = new WebhookEndpointsResource(this.transport)
-    this.webhookDeliveries = new WebhookDeliveriesResource(this.transport)
     this.oauthClients = new OAuthClientsResource(this.transport)
     this.ledgers = new LedgersResource(this.transport)
     this.organizations = new OrganizationsResource(this.transport)
@@ -158,9 +136,5 @@ export class KordioLedger {
     )
     const body = response.data
     return (body && typeof body === 'object' && 'data' in body ? body.data : body) as Capabilities
-  }
-
-  async health(): Promise<HttpResponse<unknown>> {
-    return await this.transport.request('GET', '/healthz')
   }
 }

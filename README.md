@@ -122,7 +122,9 @@ Or take one page at a time with `page.data`, `page.hasMore`, `page.nextPage()`, 
 
 ### The rest
 
-`accounts`, `balances`, `transactions`, `postings`, `reserves`, `events`, `reports`, `sources`, `reconciliationRuns`, `externalTransactions`, `periodCloses`, `accountTemplates`, `exports`, `webhookEndpoints`, `webhookDeliveries`, `oauthClients`, `ledgers`, `organizations`.
+`accounts`, `balances`, `transactions`, `postings`, `events`, `reports`, `periodCloses`, `accountTemplates`, `oauthClients`, `ledgers`, `organizations`.
+
+Ledger events are delivered by your workspace webhooks, registered with `KordioWorkspace#webhookEndpoints`. The ledger API has no webhook endpoints of its own.
 
 ---
 
@@ -223,7 +225,7 @@ if (!check.valid) throw new Error(`refusing to settle: ${check.reason}`)
 
 ## Webhooks
 
-One routine verifies deliveries from either API.
+One routine verifies every delivery. Ledger and spend control events arrive on the same workspace endpoints, signed the same way.
 
 ```ts
 import { constructWebhookEvent } from '@kordio/sdk'
@@ -288,11 +290,11 @@ Unit tests run against a mock. To check the SDK against a live ledger:
 
 ```bash
 export KORDIO_CLIENT_ID=... KORDIO_CLIENT_SECRET=...
-export KORDIO_BASE_URL=http://localhost:4000        # omit for production
+export KORDIO_BASE_URL=http://localhost:3005        # omit for production
 bun run validate:live
 ```
 
-It creates throwaway accounts, writes and reverses a transaction, ingests external transactions for a reconciliation pass, and asserts the balances land where double-entry says they should. Point it at a **test-mode** ledger; it writes real data. Set `KORDIO_AGENT_KEY` to also exercise budgets and authorization decisions, and `KORDIO_LEDGER_ID` to pin the ledger instead of letting it pick the first test-mode one.
+It creates throwaway accounts, writes, refunds and reverses transactions, attaches and looks up external references, exercises pending holds against a no-overdraft account, runs atomic and non-atomic bulk writes, and asserts the balances land where double-entry says they should. Point it at a **test-mode** ledger; it writes real data. Set `KORDIO_AGENT_KEY` to also exercise budgets and authorization decisions, and `KORDIO_LEDGER_ID` to pin the ledger instead of letting it pick the first test-mode one.
 
 ## Contributing
 

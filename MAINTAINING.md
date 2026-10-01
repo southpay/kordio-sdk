@@ -1,6 +1,6 @@
 # Maintaining this SDK
 
-The SDK wraps 155 operations across two APIs. Keeping that in sync by hand is not realistic, so most of it is not kept in sync by hand.
+The SDK wraps 116 operations across two APIs. Keeping that in sync by hand is not realistic, so most of it is not kept in sync by hand.
 
 ## The rule
 
@@ -108,7 +108,7 @@ credentials, so it is not part of `verify`:
 ```bash
 export KORDIO_CLIENT_ID=... KORDIO_CLIENT_SECRET=... KORDIO_LEDGER_ID=...
 export KORDIO_AGENT_KEY=krt_test_...
-export KORDIO_BASE_URL=http://localhost:4000
+export KORDIO_BASE_URL=http://localhost:3005
 export KORDIO_CONTROL_BASE_URL=http://localhost:3005
 bun run check:shapes
 ```
@@ -141,7 +141,6 @@ Worth fixing in `docs-kordio`, currently worked around here:
 - The spend control spec still calls a budget a `Session`: schema `Session`/`SessionEnvelope`, operation ids `createSession`/`getSession`. The paths are already `/control/v1/agent/budgets` and the fields are `budget_cents`, `remaining_cents`, `parent_budget_id`. The SDK exposes `Budget` and aliases it to `Schemas['Session']`. When the spec is renamed, change the alias in `src/control/types.ts`; nothing else moves.
 - Ledger list responses reference a generic `List` schema with no item type, so list item types are supplied by hand in the resource methods rather than generated. Giving each list endpoint a typed `data` array in the spec would let those come from the generator too.
 - Most control schemas declare no `required` fields, so every property in `src/control/generated.ts` is optional and callers write `budget.id ?? ''`. The ledger spec marks required fields properly (`Account`, `Transaction`, `Balance`), and its generated types are correspondingly sharper. Adding `required` to the control schemas would remove a lot of `??` from user code without touching a line of SDK source.
-- `GET /v1/accounts?kind=` accepts `standard | reserve`, but the `account_kind` field it filters on is `standard | restricted`, so the documented filter value `reserve` matches no field value. The SDK carries both: `AccountKindFilter` for the query and `AccountKind` for the field. One of the two enums is wrong upstream.
 - `BillingOverview.plan` is a bare `string` while `POST /billing/checkout` enumerates `sandbox | build | growth | scale | enterprise`. The request is typed as `BillingPlan`; the response cannot be until the schema declares the enum.
 - The ledger spec has no `operationId` anywhere; the control spec has 72. Not load-bearing here, but any generator that keys off operation ids will only work for one of the two.
 
@@ -151,6 +150,6 @@ Everything in `examples/` is included in `tsconfig.json`, so `bun run typecheck`
 
 ## Spec enums belong in the type system
 
-Where the spec declares a string enum, the SDK surfaces a union rather than `string`: `ReconciliationStrategy`, `ExportResource`, `ExternalTransactionStatus`, `WebhookDeliveryStatus`, `AgentStatus`, `IntentState`, `BillingPlan` and the rest. `test/types.test.ts` pins them with `@ts-expect-error` assertions, so loosening one back to `string` fails the build rather than silently removing a guard rail.
+Where the spec declares a string enum, the SDK surfaces a union rather than `string`: `AccountKind`, `TransactionStatus`, `ReportGranularity`, `AgentStatus`, `IntentState`, `BillingPlan` and the rest. `test/types.test.ts` pins them with `@ts-expect-error` assertions, so loosening one back to `string` fails the build rather than silently removing a guard rail.
 
-Two deliberate exceptions. Genuinely open sets stay open: source `kind` has a documented default and no enum, and ledger event types use `KnownLedgerEventType | (string & {})` so editors autocomplete the known ones without rejecting an event the API adds later. Do not turn those into closed unions.
+One deliberate exception. Genuinely open sets stay open: ledger event types use `KnownLedgerEventType | (string & {})` so editors autocomplete the known ones without rejecting an event the API adds later. Do not turn those into closed unions.

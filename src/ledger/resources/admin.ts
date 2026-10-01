@@ -4,9 +4,6 @@ import { splitConfig, toRequestOptions } from '../request'
 import type {
   AccountTemplate,
   AccountType,
-  Export,
-  ExportFormat,
-  ExportResource,
   FundClassification,
   IdempotentRequestConfig,
   Ledger,
@@ -24,6 +21,7 @@ export interface PeriodCloseInput extends RequestConfig {
   period_end: string
   closed_by_label: string
   note?: string
+  force?: boolean
 }
 
 export interface AccountTemplateInput extends RequestConfig {
@@ -41,7 +39,20 @@ export interface AccountTemplateInput extends RequestConfig {
 export interface LedgerInput extends RequestConfig {
   name: string
   mode: LedgerMode
+  description?: string
   metadata?: Record<string, unknown>
+}
+
+export interface LedgerListParams extends ListParams {
+  mode?: LedgerMode
+  includeArchived?: boolean
+}
+
+export interface LedgerUpdateParams extends RequestConfig {
+  name?: string
+  description?: string
+  metadata?: Record<string, unknown>
+  archived_at?: string | null
 }
 
 export class PeriodClosesResource extends Resource {
@@ -111,30 +122,6 @@ export class AccountTemplatesResource extends Resource {
   }
 }
 
-export class ExportsResource extends Resource {
-  async create(
-    params: IdempotentRequestConfig & {
-      resources?: readonly ExportResource[]
-      format?: ExportFormat
-    },
-  ): Promise<Export> {
-    const body = { resources: params.resources, format: params.format }
-    return await this.unwrap<Export>(
-      'POST',
-      '/ledger/v1/exports',
-      toRequestOptions(params, { body, idempotencyKey: params.idempotencyKey }),
-    )
-  }
-
-  async get(id: string, config?: RequestConfig): Promise<Export> {
-    return await this.unwrap<Export>(
-      'GET',
-      `/ledger/v1/exports/${encodePathSegment(id)}`,
-      toRequestOptions(config),
-    )
-  }
-}
-
 export class OAuthClientsResource extends Resource {
   async create(params: OAuthClientInput & RequestConfig): Promise<OAuthClient> {
     const { config, body } = splitConfig(params)
@@ -189,10 +176,10 @@ export class LedgersResource extends Resource {
     )
   }
 
-  async list(params: ListParams = {}): Promise<Page<Ledger>> {
+  async list(params: LedgerListParams = {}): Promise<Page<Ledger>> {
     return await this.page<Ledger>(
       '/ledger/v1/ledgers',
-      { cursor: params.cursor, limit: params.limit },
+      { mode: params.mode, include_archived: params.includeArchived },
       'cursor',
       toRequestOptions(params),
     )
@@ -206,10 +193,7 @@ export class LedgersResource extends Resource {
     )
   }
 
-  async update(
-    id: string,
-    params: RequestConfig & { name?: string; metadata?: Record<string, unknown> },
-  ): Promise<Ledger> {
+  async update(id: string, params: LedgerUpdateParams): Promise<Ledger> {
     const { config, body } = splitConfig(params)
     return await this.unwrap<Ledger>(
       'PATCH',

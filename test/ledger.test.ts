@@ -371,34 +371,111 @@ describe('default base url', () => {
   })
 })
 
-describe('inbound endpoints return the source', () => {
-  test('enableInbound gives back the source, carrying the one-time secret', async () => {
+describe('contract details the TigerBeetle-backed API taught us', () => {
+  test('create sends external_refs and conditions, never booking_date', async () => {
+    const server = mockFetch([{ status: 201, body: ledgerEnvelope({ object: 'transaction' }) }])
+    await client(server).transactions.create({
+      idempotencyKey: 'deposit:0xabc',
+      postings: [
+        { accountId: 'cash:usdc', amount: 500, currency: 'USDC' },
+        { accountId: 'wallet:acme', amount: -500, currency: 'USDC' },
+      ],
+      externalRefs: [{ rail: 'ethereum', kind: 'tx_hash', value: '0xabc' }],
+      conditions: [{ account: 'wallet:acme', lock_version: 3 }],
+    })
+    const body = server.last().body as Record<string, unknown>
+    expect(body.external_refs).toEqual([{ rail: 'ethereum', kind: 'tx_hash', value: '0xabc' }])
+    expect(body.conditions).toEqual([{ account: 'wallet:acme', lock_version: 3 }])
+    expect(body).not.toHaveProperty('booking_date')
+  })
+
+  test('bulk sends atomic and reads per-item results', async () => {
     const server = mockFetch([
       {
-        status: 201,
+        status: 207,
         body: ledgerEnvelope({
-          object: 'source',
-          id: 'src_1',
-          name: 'cobo',
-          kind: 'custody',
-          inbound_enabled: true,
-          inbound_url: 'https://api.kordio.io/ledger/v1/inbound/sources/insrc_abc',
-          inbound_secret: 'inbsec_xyz',
+          object: 'bulk_result',
+          atomic: true,
+          partial_failure: true,
+          results: [
+            {
+              idempotency_key: 'a',
+              status: 'error',
+              error: { code: 'invalid_request', message: 'aborted' },
+            },
+            {
+              idempotency_key: 'b',
+              status: 'error',
+              error: { code: 'insufficient_funds', message: 'no' },
+            },
+          ],
         }),
       },
     ])
-    const source = await client(server).sources.enableInbound('src_1')
-    expect(source.object).toBe('source')
-    expect(source.inbound_url).toContain('/ledger/v1/inbound/sources/')
-    expect(source.inbound_secret).toBe('inbsec_xyz')
+    const result = await client(server).transactions.bulk({
+      atomic: true,
+      transactions: [
+        {
+          idempotencyKey: 'a',
+          postings: [
+            { accountId: 'cash', amount: 1, currency: 'USD' },
+            { accountId: 'rev', amount: -1, currency: 'USD' },
+          ],
+        },
+        {
+          idempotencyKey: 'b',
+          postings: [
+            { accountId: 'cash', amount: 2, currency: 'USD' },
+            { accountId: 'rev', amount: -2, currency: 'USD' },
+          ],
+        },
+      ],
+    })
+    expect((server.last().body as { atomic: boolean }).atomic).toBe(true)
+    expect(result.partial_failure).toBe(true)
+    expect(result.results.map((r) => r.error?.code)).toEqual([
+      'invalid_request',
+      'insufficient_funds',
+    ])
   })
 
-  test('disableInbound returns the source too, not an empty body', async () => {
+  test('commit needs no idempotency key', async () => {
     const server = mockFetch([
-      { body: ledgerEnvelope({ object: 'source', id: 'src_1', inbound_enabled: false }) },
+      { body: ledgerEnvelope({ object: 'transaction', status: 'posted' }) },
     ])
-    const source = await client(server).sources.disableInbound('src_1')
-    expect(source.inbound_enabled).toBe(false)
-    expect(server.last().method).toBe('DELETE')
+    await client(server).transactions.commit('3061ec4e-c959-49ba-a0f6-99186a7bd5d8')
+    expect(server.last().method).toBe('POST')
+    expect(server.last().url).toContain('/commit')
+    expect(server.last().headers['idempotency-key']).toBeUndefined()
+  })
+
+  test('income statement sends granularity and no currency', async () => {
+    const server = mockFetch([{ body: ledgerEnvelope({ object: 'income_statement' }) }])
+    await client(server).reports.incomeStatement({
+      from: '2026-09-01T00:00:00Z',
+      to: '2026-10-01T00:00:00Z',
+      granularity: 'week',
+    })
+    expect(server.last().url).toContain('granularity=week')
+    expect(server.last().url).not.toContain('currency')
+  })
+})
+
+describe('account close and refund listing', () => {
+  test('close posts closed_by_label', async () => {
+    const server = mockFetch([{ body: ledgerEnvelope({ object: 'account', status: 'closed' }) }])
+    const account = await client(server).accounts.close('cash:usd', { closedByLabel: 'ops@acme' })
+    expect(account.status).toBe('closed')
+    expect(server.last().url).toBe('https://api.test/ledger/v1/accounts/cash:usd/close')
+    expect(server.last().body).toEqual({ closed_by_label: 'ops@acme' })
+  })
+
+  test('refunds pages the refund transactions of the original', async () => {
+    const server = mockFetch([{ body: ledgerList([{ object: 'transaction', id: 'r1' }]) }])
+    const page = await client(server).transactions.refunds('3061ec4e-c959-49ba-a0f6-99186a7bd5d8')
+    expect(page.data).toHaveLength(1)
+    expect(server.last().url).toContain(
+      '/transactions/3061ec4e-c959-49ba-a0f6-99186a7bd5d8/refunds',
+    )
   })
 })

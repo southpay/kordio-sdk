@@ -29,60 +29,41 @@ const deposits: CustodyDeposit[] = [
   },
 ]
 
-const source =
-  (await kordio.sources.list().then((page) => page.data.find((s) => s.name === 'cobo'))) ??
-  (await kordio.sources.create({
-    name: 'cobo',
-    kind: 'custody',
-    default_strategy: 'exact',
-    default_window_seconds: 3600,
-    default_account_id: 'cash:usdc',
-  }))
+const unbooked: CustodyDeposit[] = []
+const mismatched: CustodyDeposit[] = []
 
-const ingest = await kordio.sources.ingest(source.id, {
-  items: deposits.map((deposit) => ({
-    external_id: deposit.txHash,
-    amount: deposit.amountMinorUnits,
-    currency: deposit.currency,
-    occurred_at: deposit.seenAt,
-    reference_rail: 'ethereum',
-    reference_kind: 'tx_hash',
-    reference_value: deposit.txHash,
-  })),
-})
-
-if (ingest.error_count > 0) {
-  for (const result of ingest.results) {
-    if (result.error) console.error(`${result.external_id}: ${result.error.message}`)
-  }
-}
-
-const run = await kordio.sources.reconcile(source.id, {
-  strategy: 'sum_in_window',
-  window_seconds: 3600,
-})
-
-console.log(`run ${run.id}: matched ${run.matched_count}, unmatched ${run.unmatched_count}`)
-
-const open = await kordio.externalTransactions.list({ sourceId: source.id, status: 'open' })
-
-for await (const external of open) {
+for (const deposit of deposits) {
   const booked = await kordio.transactions
-    .lookup({ rail: 'ethereum', kind: 'tx_hash', value: external.external_id })
+    .lookup({ rail: 'ethereum', kind: 'tx_hash', value: deposit.txHash })
     .catch(() => null)
 
   if (!booked) {
-    await kordio.externalTransactions.ignore(external.id, {
-      reason: 'no internal posting, sent to ops',
-    })
+    unbooked.push(deposit)
     continue
   }
 
-  const postingId = booked.postings?.[0]?.id
-  if (postingId === undefined) continue
+  const custodyLeg = booked.postings.find((p) => p.account === 'cash:usdc')
+  if (custodyLeg?.amount !== deposit.amountMinorUnits) mismatched.push(deposit)
+}
 
-  await kordio.externalTransactions.match(external.id, {
-    postingIds: [postingId],
-    note: `matched on ${external.external_id}`,
+for (const deposit of unbooked) {
+  await kordio.transactions.create({
+    idempotencyKey: `custody:${deposit.txHash}`,
+    valueDate: deposit.seenAt,
+    externalRefs: [{ rail: 'ethereum', kind: 'tx_hash', value: deposit.txHash }],
+    postings: [
+      { accountId: 'cash:usdc', amount: deposit.amountMinorUnits, currency: deposit.currency },
+      {
+        accountId: 'suspense:usdc',
+        amount: `-${deposit.amountMinorUnits}`,
+        currency: deposit.currency,
+      },
+    ],
+    metadata: { source: 'custody', needs_review: 'true' },
   })
+}
+
+console.log(`${deposits.length} deposits, ${unbooked.length} booked to suspense`)
+for (const deposit of mismatched) {
+  console.error(`${deposit.txHash}: booked amount differs from custody, sent to ops`)
 }

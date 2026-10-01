@@ -1,17 +1,12 @@
 import type { Page } from '../../core/pagination'
-import { encodePathSegment, Resource } from '../../core/resource'
+import { Resource } from '../../core/resource'
 import { toRequestOptions } from '../request'
-import type { ListParams, Posting, RequestConfig } from '../types'
+import type { ListParams, Posting } from '../types'
 
 export interface PostingListParams extends ListParams {
   reconciled?: boolean
   account?: string
   beforeValueDate?: Date | string
-}
-
-export interface ReconciliationLinkParams extends RequestConfig {
-  externalReference?: string
-  reconciliationRunId?: string
 }
 
 export class PostingsResource extends Resource {
@@ -31,21 +26,6 @@ export class PostingsResource extends Resource {
       query,
       'cursor',
       toRequestOptions(params),
-    )
-  }
-
-  async reconcile<T = unknown>(
-    id: string | number,
-    params: ReconciliationLinkParams = {},
-  ): Promise<T> {
-    const body = {
-      external_reference: params.externalReference,
-      reconciliation_run_id: params.reconciliationRunId,
-    }
-    return await this.unwrap<T>(
-      'POST',
-      `/ledger/v1/postings/${encodePathSegment(String(id))}/reconciliations`,
-      toRequestOptions(params, { body }),
     )
   }
 }
